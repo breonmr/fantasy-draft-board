@@ -33,6 +33,17 @@ const TIER_COLORS = {
   5: "bg-rose-100 text-rose-800",
 };
 
+// Board-only pill colors
+const POS_BG = (pos) => {
+  const p = (pos || "").toUpperCase();
+  if (p === "WR") return "bg-blue-500 text-white";
+  if (p === "RB") return "bg-green-500 text-white";
+  if (p === "TE") return "bg-orange-500 text-white";
+  if (p === "QB") return "bg-pink-600 text-white";
+  if (p === "DST" || p === "DEF") return "bg-gray-400 text-white";
+  return "bg-gray-300 text-gray-900";
+};
+
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 /* ---------- parsing: "Tier, POS#, Team, Name" OR fallback "Name POS TEAM T#" ---------- */
@@ -100,12 +111,12 @@ function loadState() {
 }
 
 /* =======================
-   UI primitives
+   UI primitives (compact)
 ======================= */
 const Button = ({ className = "", ...p }) => (
   <button
     {...p}
-    className={`px-3 py-2 rounded-2xl shadow text-sm hover:shadow-md active:scale-[0.99] ${
+    className={`px-2.5 py-1.5 rounded-xl shadow text-xs hover:shadow-md active:scale-[0.99] ${
       p.disabled ? "opacity-50 cursor-not-allowed" : ""
     } ${className}`}
   />
@@ -114,14 +125,14 @@ const Button = ({ className = "", ...p }) => (
 const Input = ({ className = "", ...p }) => (
   <input
     {...p}
-    className={`px-3 py-2 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring w-full ${className}`}
+    className={`px-2.5 py-1.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring w-full ${className}`}
   />
 );
 
 const Textarea = ({ className = "", ...p }) => (
   <textarea
     {...p}
-    className={`px-3 py-2 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring w-full ${className}`}
+    className={`px-2.5 py-1.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring w-full ${className}`}
   />
 );
 
@@ -383,7 +394,7 @@ export default function App() {
   /* ------- Rendering helpers ------- */
   const tierPill = (tier) => (
     <span
-      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+      className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
         TIER_COLORS[tier] || "bg-gray-100 text-gray-700"
       }`}
     >
@@ -391,10 +402,11 @@ export default function App() {
     </span>
   );
 
+  // Compact overall-ranking row
   const PlayerRow = ({ p, overallIndex, posIndex }) => (
     <li
       key={p.id}
-      className={`rounded-md border bg-white flex items-center justify-between gap-2 p-2 ${
+      className={`rounded-md border bg-white flex items-center justify-between gap-2 p-1.5 ${
         editMode ? "cursor-grab" : "cursor-pointer"
       }`}
       draggable={editMode}
@@ -406,27 +418,26 @@ export default function App() {
       title={editMode ? "Drag to reorder" : "Click to draft"}
     >
       <div className="flex items-center gap-2">
-        <span className="w-6 text-xs text-gray-500 tabular-nums">
+        <span className="w-5 text-[10px] text-gray-500 tabular-nums">
           {overallIndex + 1}
         </span>
         {tierPill(p.tier || 1)}
-        <span className="text-[11px] px-2 py-0.5 bg-gray-100 rounded-full">
+        <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded-full">
           {p.pos ? `${p.pos}${posIndex ?? ""}` : "POS"}
         </span>
-        <span className="font-semibold">{p.name}</span>
+        <span className="font-semibold text-sm">{p.name}</span>
       </div>
-      <div className="text-xs text-gray-600 font-medium">
-        {p.team || ""}
-      </div>
+      <div className="text-[11px] text-gray-600 font-medium">{p.team || ""}</div>
     </li>
   );
 
+  // Build the overall list with insertion line
   const renderOverallList = () => {
     const items = [];
     for (let i = 0; i < filteredAvailable.length; i++) {
       if (insertIndex === i && editMode) {
         items.push(
-          <div key={`line-${i}`} className="h-1 bg-gray-800 rounded my-1" />
+          <div key={`line-${i}`} className="h-[3px] bg-gray-800 rounded my-0.5" />
         );
       }
       const p = filteredAvailable[i];
@@ -441,7 +452,7 @@ export default function App() {
       );
     }
     if (insertIndex === filteredAvailable.length && editMode) {
-      items.push(<div key="line-end" className="h-1 bg-gray-800 rounded my-1" />);
+      items.push(<div key="line-end" className="h-[3px] bg-gray-800 rounded my-0.5" />);
     }
     return items;
   };
@@ -450,30 +461,31 @@ export default function App() {
      Render
   ======================= */
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        {/* Top bar */}
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-3 md:p-4">
+      <div className="max-w-7xl mx-auto space-y-3">
+        {/* Top bar (exports only now) */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl md:text-3xl font-bold">Fantasy Draft Board</h1>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => setEditMode((v) => !v)} className="bg-white">
-              {editMode ? "Exit Edit" : "Edit Mode"}
-            </Button>
             <Button onClick={exportCSV} className="bg-white">Export CSV</Button>
             <Button onClick={exportJSON} className="bg-white">Export JSON</Button>
           </div>
         </div>
 
-        {/* Two columns: Overall + Draft Board */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Left: Overall Rankings with tabs + search */}
-          <section className="bg-white rounded-2xl shadow p-4">
-            <div className="flex items-center justify-between mb-3">
+        {/* 25% / 75% layout */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          {/* Left: Overall Rankings (col-span-1 → 25%) */}
+          <section className="bg-white rounded-2xl shadow p-3 md:col-span-1">
+            <div className="flex items-center justify-between mb-2">
               <h2 className="font-bold">Overall Rankings</h2>
-              <span className="text-xs text-gray-500">{available.length} available</span>
+              <div className="flex items-center gap-2">
+                <Button onClick={() => setEditMode((v) => !v)} className="bg-white">
+                  {editMode ? "Done" : "Edit Order"}
+                </Button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-2">
               <div className="flex flex-wrap gap-1">
                 {POS_LIST.map((t) => (
                   <Button
@@ -485,31 +497,31 @@ export default function App() {
                   </Button>
                 ))}
               </div>
-              <div className="flex-1 min-w-[180px]">
-                <Input
-                  placeholder="Search by name / team"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
+            </div>
+            <div className="mb-2">
+              <Input
+                placeholder="Search by name / team"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
 
             <ul
-              className="space-y-2 max-h-[70vh] overflow-auto pr-1"
+              className="space-y-1.5 max-h-[78vh] overflow-auto pr-1"
               onDragOver={(e) => editMode && e.preventDefault()}
               onDrop={onListDrop}
             >
               {renderOverallList()}
               {filteredAvailable.length === 0 && (
-                <li className="text-sm text-gray-500">No players match.</li>
+                <li className="text-xs text-gray-500">No players match.</li>
               )}
             </ul>
 
             {/* Quick Import (in Edit Mode) */}
             {editMode && (
-              <div className="mt-6 border-t pt-4">
+              <div className="mt-4 border-t pt-3">
                 <details>
-                  <summary className="cursor-pointer font-semibold">
+                  <summary className="cursor-pointer font-semibold text-sm">
                     Quick Import (Tier, POS#, Team, Name)
                   </summary>
                   <div className="space-y-2 mt-2">
@@ -530,9 +542,9 @@ export default function App() {
             )}
           </section>
 
-          {/* Right: Draft Board (snake) */}
-          <section className="bg-white rounded-2xl shadow p-4">
-            <div className="flex items-center justify-between mb-3">
+          {/* Right: Draft Board (col-span-3 → 75%) */}
+          <section className="bg-white rounded-2xl shadow p-3 md:col-span-3">
+            <div className="flex items-center justify-between mb-2">
               <h2 className="font-bold">Draft Board</h2>
               <div className="flex items-center gap-2">
                 <Button className="bg-white" onClick={() => setEditNames((v) => !v)}>
@@ -546,17 +558,24 @@ export default function App() {
             </div>
 
             <div className="overflow-auto">
-              <table className="min-w-full text-sm border">
+              <table className="min-w-full text-xs border">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="p-2 border w-12 text-center">Rnd</th>
+                    <th className="p-2 border w-10 text-center">Rnd</th>
                     {Array.from({ length: settings.numTeams }, (_, c) => (
-                      <th key={c} className="p-2 border min-w-[140px]">
+                      <th key={c} className="p-2 border min-w-[110px]">
                         {editNames ? (
                           <input
-                            className="w-full px-2 py-1 rounded border"
+                            className="w-full px-2 py-1 rounded border text-xs"
                             value={settings.teamNames[c] || ""}
-                            onChange={(e) => setTeamName(c, e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSettings((s) => {
+                                const t = [...s.teamNames];
+                                t[c] = val;
+                                return { ...s, teamNames: t };
+                              });
+                            }}
                           />
                         ) : (
                           <span className="font-semibold">{settings.teamNames[c]}</span>
@@ -568,19 +587,20 @@ export default function App() {
                 <tbody>
                   {Array.from({ length: settings.numRounds }, (_, r) => (
                     <tr key={r}>
-                      <td className="p-2 border text-center text-gray-500 w-12">{r + 1}</td>
+                      <td className="p-1.5 border text-center text-gray-500 w-10">
+                        {r + 1}
+                      </td>
                       {Array.from({ length: settings.numTeams }, (_, c) => {
                         const p = board[r][c];
                         return (
-                          <td key={c} className="p-2 border align-top">
+                          <td key={c} className="p-1.5 border align-top">
                             {p ? (
-                              <div className="flex items-center gap-2">
-                                {tierPill(p.tier || 1)}
-                                <span className="text-[11px] px-2 py-0.5 bg-gray-100 rounded-full">
-                                  {p.pos || "POS"}
-                                </span>
-                                <span className="font-semibold">{p.name}</span>
-                                <span className="text-xs text-gray-600">{p.team || ""}</span>
+                              <div
+                                className={`px-2 py-1 rounded-md text-xs font-semibold ${POS_BG(
+                                  p.pos
+                                )}`}
+                              >
+                                {p.name}
                               </div>
                             ) : (
                               <span className="text-gray-300">—</span>
