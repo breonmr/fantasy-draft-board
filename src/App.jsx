@@ -188,13 +188,11 @@ export default function App() {
     // reorder byRank, then write back ranks
     const ordered = [...byRank];
     const [moved] = ordered.splice(from, 1);
-    ordered.splice(to, 0, moved);
-    setPlayers((ps) =>
-      ordered.map((p, i) => {
-        const original = ps.find((x) => x.id === p.id)!;
-        return { ...original, rank: i };
-      })
-    );
+ordered.splice(to, 0, moved);
+setPlayers((ps) => {
+  const byId = Object.fromEntries(ps.map(x => [x.id, x]));
+  return ordered.map((p, i) => ({ ...byId[p.id], rank: i }));
+});
     dragIndexRef.current = null;
   };
 
