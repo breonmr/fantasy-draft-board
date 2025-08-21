@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
   teamNames: Array.from({ length: 12 }, (_, i) => `Team ${i + 1}`),
 };
 
+// Quick seed — replace via Quick Import
 const STARTERS = [
   "1, WR1, CIN, Ja'Marr Chase",
   "1, WR1, MIN, Justin Jefferson",
@@ -34,13 +35,16 @@ const TIER_COLORS = {
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
+/* ---------- parsing: "Tier, POS#, Team, Name" OR fallback "Name POS TEAM T#" ---------- */
 function parseImportLine(line) {
-  // New format: Tier, POS#, Team, Name (commas/pipes/tabs)
-  // Example: 1, WR1, CIN, Ja'Marr Chase
-  const parts = line.split(/[,\|\t]/).map((s) => s.trim()).filter(Boolean);
+  const parts = line
+    .split(/[,\|\t]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   if (parts.length >= 4 && /^\d+$/.test(parts[0])) {
     const tier = Math.max(1, parseInt(parts[0], 10) || 1);
-    const posToken = parts[1].toUpperCase();
+    const posToken = (parts[1] || "").toUpperCase();
     const posMatch = posToken.match(/[A-Z]+/);
     const pos = posMatch ? posMatch[0] : "";
     const team = (parts[2] || "").toUpperCase();
@@ -67,15 +71,11 @@ function parseImportLine(line) {
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) throw new Error("no state");
+    if (!raw) throw new Error("no saved state");
     const obj = JSON.parse(raw);
-    // v2 compat where we saved just players[]
     if (Array.isArray(obj)) {
-      return {
-        players: obj,
-        history: [],
-        settings: DEFAULT_SETTINGS,
-      };
+      // very old version: players[]
+      return { players: obj, history: [], settings: DEFAULT_SETTINGS };
     }
     return {
       players: obj.players || [],
@@ -105,15 +105,19 @@ function loadState() {
 const Button = ({ className = "", ...p }) => (
   <button
     {...p}
-    className={`px-3 py-2 rounded-2xl shadow text-sm hover:shadow-md active:scale-[0.99] ${p.disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
+    className={`px-3 py-2 rounded-2xl shadow text-sm hover:shadow-md active:scale-[0.99] ${
+      p.disabled ? "opacity-50 cursor-not-allowed" : ""
+    } ${className}`}
   />
 );
+
 const Input = ({ className = "", ...p }) => (
   <input
     {...p}
     className={`px-3 py-2 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring w-full ${className}`}
   />
 );
+
 const Textarea = ({ className = "", ...p }) => (
   <textarea
     {...p}
@@ -135,7 +139,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [importText, setImportText] = useState("");
 
-  // drag indicator state
+  // drag state for insertion line
   const dragFromRef = useRef(null);
   const [insertIndex, setInsertIndex] = useState(null);
 
@@ -159,7 +163,7 @@ export default function App() {
     [byRank]
   );
 
-  // POS# (within available list)
+  // POS# within current available order
   const posRankMap = useMemo(() => {
     const counts = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DST: 0 };
     const map = {};
@@ -173,7 +177,7 @@ export default function App() {
     return map;
   }, [available]);
 
-  // Filter/tabs/search live in the overall list now
+  // tabs + search live in overall column
   const filteredAvailable = useMemo(() => {
     return available.filter((p) => {
       if (posTab !== "ALL" && (p.pos || "") !== posTab) return false;
@@ -184,31 +188,29 @@ export default function App() {
   }, [available, posTab, search]);
 
   /* ------- Actions ------- */
-  function applyReorder(from, to) {
-    const ordered = [...available]; // only the undrafted list is shown/dragged
-    const [moved] = ordered.splice(from, 1);
-    ordered.splice(to, 0, moved);
+  function applyReorder(fromIndexInAvail, toIndexInAvail) {
+    const orderedAvail = [...available];
+    const [moved] = orderedAvail.splice(fromIndexInAvail, 1);
+    orderedAvail.splice(toIndexInAvail, 0, moved);
 
     setPlayers((ps) => {
       const byId = Object.fromEntries(ps.map((x) => [x.id, x]));
-      // Build a full ordered list: ordered (undrafted) + drafted (at their same ranks)
-      const drafted = byRank.filter((p) => p.drafted);
-      // Merge back in their relative ranks
+      // Rebuild full order: interleave ordered undrafted with drafted in original relative positions
       const merged = [];
       let u = 0;
       for (let i = 0; i < byRank.length; i++) {
-        const isDrafted = byRank[i].drafted;
-        if (isDrafted) merged.push(byRank[i]);
-        else merged.push(ordered[u++]);
+        const wasDrafted = byRank[i].drafted;
+        if (wasDrafted) merged.push(byRank[i]);
+        else merged.push(orderedAvail[u++]);
       }
 
-      // Auto-tier adjustment for the moved player
+      // Auto-tier: look at immediate neighbors in merged
       const newIndex = merged.findIndex((x) => x.id === moved.id);
       const left = merged[newIndex - 1];
       const right = merged[newIndex + 1];
-      let newTier = byId[moved.id].tier || 1;
       const lt = left ? (byId[left.id].tier || 1) : null;
       const rt = right ? (byId[right.id].tier || 1) : null;
+      let newTier = byId[moved.id].tier || 1;
       if (lt != null && rt != null) newTier = Math.min(lt, rt);
       else if (lt != null) newTier = lt;
       else if (rt != null) newTier = rt;
@@ -256,40 +258,37 @@ export default function App() {
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const onItemDragOver = (index) => (e) => {
+  const onItemDragOver = (overallIndex) => (e) => {
     if (!editMode) return;
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     const before = e.clientY - rect.top < rect.height / 2;
-    setInsertIndex(before ? index : index + 1);
+    setInsertIndex(before ? overallIndex : overallIndex + 1);
   };
 
   const onListDrop = (e) => {
     if (!editMode) return;
     e.preventDefault();
-    const from = dragFromRef.current;
-    const to = insertIndex;
+    const fromFiltered = dragFromRef.current;
+    const toFiltered = insertIndex;
     setInsertIndex(null);
     dragFromRef.current = null;
-    if (from == null || to == null) return;
+    if (fromFiltered == null || toFiltered == null) return;
 
-    // translate "from" (index within filteredAvailable) to its index in available
-    const fromId = filteredAvailable[from]?.id;
+    // Translate filtered indexes to indexes in "available"
+    const fromId = filteredAvailable[fromFiltered]?.id;
     const toAfterId =
-      to >= filteredAvailable.length ? null : filteredAvailable[to]?.id;
+      toFiltered >= filteredAvailable.length ? null : filteredAvailable[toFiltered]?.id;
 
     const fromIndexInAvail = available.findIndex((p) => p.id === fromId);
     let toIndexInAvail =
-      toAfterId == null
-        ? available.length
-        : available.findIndex((p) => p.id === toAfterId);
+      toAfterId == null ? available.length : available.findIndex((p) => p.id === toAfterId);
 
-    // reorder within available
-    let adjustedTo = toIndexInAvail;
-    if (fromIndexInAvail < toIndexInAvail) adjustedTo -= 1;
+    // If moving downwards, account for removal
+    if (fromIndexInAvail < toIndexInAvail) toIndexInAvail -= 1;
 
-    if (fromIndexInAvail >= 0 && adjustedTo >= 0) {
-      applyReorder(fromIndexInAvail, adjustedTo);
+    if (fromIndexInAvail >= 0 && toIndexInAvail >= 0) {
+      applyReorder(fromIndexInAvail, toIndexInAvail);
     }
   };
 
@@ -333,6 +332,7 @@ export default function App() {
       .join("\n");
     downloadBlob(header + rows, "players.csv", "text/csv");
   };
+
   const exportJSON = () =>
     downloadBlob(
       JSON.stringify({ players, history, settings }, null, 2),
@@ -360,7 +360,6 @@ export default function App() {
     return { row: r, col: c };
   }
 
-  // materialize board cells from history
   const board = useMemo(() => {
     const grid = Array.from({ length: numRounds }, () =>
       Array.from({ length: numTeams }, () => null)
@@ -371,7 +370,7 @@ export default function App() {
       if (p && row < numRounds) grid[row][col] = p;
     });
     return grid;
-  }, [history, players, numTeams, numRounds]);
+  }, [history, players, numRounds, numTeams]);
 
   const [editNames, setEditNames] = useState(false);
   const setTeamName = (i, name) =>
@@ -416,11 +415,12 @@ export default function App() {
         </span>
         <span className="font-semibold">{p.name}</span>
       </div>
-      <div className="text-xs text-gray-600 font-medium">{p.team || ""}</div>
+      <div className="text-xs text-gray-600 font-medium">
+        {p.team || ""}
+      </div>
     </li>
   );
 
-  // build the overall list with insertion line
   const renderOverallList = () => {
     const items = [];
     for (let i = 0; i < filteredAvailable.length; i++) {
@@ -441,13 +441,14 @@ export default function App() {
       );
     }
     if (insertIndex === filteredAvailable.length && editMode) {
-      items.push(
-        <div key={`line-end`} className="h-1 bg-gray-800 rounded my-1" />
-      );
+      items.push(<div key="line-end" className="h-1 bg-gray-800 rounded my-1" />);
     }
     return items;
   };
 
+  /* =======================
+     Render
+  ======================= */
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-4">
@@ -458,12 +459,8 @@ export default function App() {
             <Button onClick={() => setEditMode((v) => !v)} className="bg-white">
               {editMode ? "Exit Edit" : "Edit Mode"}
             </Button>
-            <Button onClick={exportCSV} className="bg-white">
-              Export CSV
-            </Button>
-            <Button onClick={exportJSON} className="bg-white">
-              Export JSON
-            </Button>
+            <Button onClick={exportCSV} className="bg-white">Export CSV</Button>
+            <Button onClick={exportJSON} className="bg-white">Export JSON</Button>
           </div>
         </div>
 
@@ -473,10 +470,132 @@ export default function App() {
           <section className="bg-white rounded-2xl shadow p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold">Overall Rankings</h2>
-              <span className="text-xs text-gray-500">
-                {available.length} available
-              </span>
+              <span className="text-xs text-gray-500">{available.length} available</span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <div className="flex flex-wrap
+              <div className="flex flex-wrap gap-1">
+                {POS_LIST.map((t) => (
+                  <Button
+                    key={t}
+                    className={`bg-white ${posTab === t ? "ring-2 ring-black" : ""}`}
+                    onClick={() => setPosTab(t)}
+                  >
+                    {t}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex-1 min-w-[180px]">
+                <Input
+                  placeholder="Search by name / team"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <ul
+              className="space-y-2 max-h-[70vh] overflow-auto pr-1"
+              onDragOver={(e) => editMode && e.preventDefault()}
+              onDrop={onListDrop}
+            >
+              {renderOverallList()}
+              {filteredAvailable.length === 0 && (
+                <li className="text-sm text-gray-500">No players match.</li>
+              )}
+            </ul>
+
+            {/* Quick Import (in Edit Mode) */}
+            {editMode && (
+              <div className="mt-6 border-t pt-4">
+                <details>
+                  <summary className="cursor-pointer font-semibold">
+                    Quick Import (Tier, POS#, Team, Name)
+                  </summary>
+                  <div className="space-y-2 mt-2">
+                    <Textarea
+                      rows={6}
+                      placeholder={`Examples:\n1, WR1, LAR, Puka Nacua\n1, RB1, NYJ, Breece Hall\n2, TE1, DET, Sam LaPorta`}
+                      value={importText}
+                      onChange={(e) => setImportText(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button className="bg-white" onClick={importReplace}>
+                        Replace List
+                      </Button>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            )}
+          </section>
+
+          {/* Right: Draft Board (snake) */}
+          <section className="bg-white rounded-2xl shadow p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold">Draft Board</h2>
+              <div className="flex items-center gap-2">
+                <Button className="bg-white" onClick={() => setEditNames((v) => !v)}>
+                  {editNames ? "Done names" : "Edit names"}
+                </Button>
+                <Button className="bg-white" onClick={undoLast} disabled={!history.length}>
+                  Undo
+                </Button>
+                <Button className="bg-white" onClick={resetDraft}>Reset</Button>
+              </div>
+            </div>
+
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm border">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="p-2 border w-12 text-center">Rnd</th>
+                    {Array.from({ length: settings.numTeams }, (_, c) => (
+                      <th key={c} className="p-2 border min-w-[140px]">
+                        {editNames ? (
+                          <input
+                            className="w-full px-2 py-1 rounded border"
+                            value={settings.teamNames[c] || ""}
+                            onChange={(e) => setTeamName(c, e.target.value)}
+                          />
+                        ) : (
+                          <span className="font-semibold">{settings.teamNames[c]}</span>
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: settings.numRounds }, (_, r) => (
+                    <tr key={r}>
+                      <td className="p-2 border text-center text-gray-500 w-12">{r + 1}</td>
+                      {Array.from({ length: settings.numTeams }, (_, c) => {
+                        const p = board[r][c];
+                        return (
+                          <td key={c} className="p-2 border align-top">
+                            {p ? (
+                              <div className="flex items-center gap-2">
+                                {tierPill(p.tier || 1)}
+                                <span className="text-[11px] px-2 py-0.5 bg-gray-100 rounded-full">
+                                  {p.pos || "POS"}
+                                </span>
+                                <span className="font-semibold">{p.name}</span>
+                                <span className="text-xs text-gray-600">{p.team || ""}</span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
