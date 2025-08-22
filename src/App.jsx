@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 /* =======================
    Storage / schema
 ======================= */
-const STORAGE_KEY = "fantasy-draft-board-v4";
+const STORAGE_KEY = "fantasy-draft-board-v5";
 const DARK_KEY = "fdb_dark";
 
 const DEFAULT_SETTINGS = {
@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS = {
   teamNames: Array.from({ length: 12 }, (_, i) => `Team ${i + 1}`),
 };
 
-// Quick seed — replace via Import
+// seed — replace via Import
 const STARTERS = [
   "1, WR1, CIN, Ja'Marr Chase",
   "1, WR1, MIN, Justin Jefferson",
@@ -31,15 +31,15 @@ const POS_LIST = ["ALL", "RB", "WR", "QB", "TE", "K", "DST"];
 /* Pastel board colors by position (also used on tabs) */
 const POS_BG = (pos) => {
   const p = (pos || "").toUpperCase();
-  if (p === "WR") return "bg-blue-300 text-gray-900";
-  if (p === "RB") return "bg-green-300 text-gray-900";
-  if (p === "TE") return "bg-orange-300 text-gray-900";
-  if (p === "QB") return "bg-pink-300 text-gray-900";
-  if (p === "DST" || p === "DEF") return "bg-gray-300 text-gray-900";
-  return "bg-gray-300 text-gray-900";
+  if (p === "WR") return "bg-blue-300 text-black";
+  if (p === "RB") return "bg-green-300 text-black";
+  if (p === "TE") return "bg-orange-300 text-black";
+  if (p === "QB") return "bg-pink-300 text-black";
+  if (p === "DST" || p === "DEF") return "bg-gray-300 text-black";
+  return "bg-gray-300 text-black";
 };
 
-/* Pastel tier colors — separate palette, looping after 5 */
+/* Pastel tier colors — distinct from POS; loop after 5 */
 const TIER_CLASSES = [
   "bg-emerald-200 text-emerald-900",
   "bg-sky-200 text-sky-900",
@@ -51,13 +51,9 @@ const tierClass = (tier = 1) => TIER_CLASSES[(Math.max(1, tier) - 1) % TIER_CLAS
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-/* ---------- parsing: "Tier, POS#, Team, Name" OR fallback "Name POS TEAM T#" ---------- */
+/* ---------- parsing ---------- */
 function parseImportLine(line) {
-  const parts = line
-    .split(/[,\|\t]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
+  const parts = line.split(/[,\|\t]/).map((s) => s.trim()).filter(Boolean);
   if (parts.length >= 4 && /^\d+$/.test(parts[0])) {
     const tier = Math.max(1, parseInt(parts[0], 10) || 1);
     const posToken = (parts[1] || "").toUpperCase();
@@ -67,20 +63,11 @@ function parseImportLine(line) {
     const name = parts.slice(3).join(" ");
     return { tier, pos, team, name };
   }
-
-  // Fallback: "Name POS TEAM T#"
-  let name = line.trim();
-  let pos = "";
-  let team = "";
-  let tier = 1;
-  const t = line.match(/T(\d+)/i);
-  if (t) tier = parseInt(t[1], 10) || 1;
+  // fallback
+  let name = line.trim(), pos = "", team = "", tier = 1;
+  const t = line.match(/T(\d+)/i); if (t) tier = parseInt(t[1], 10) || 1;
   const pt = line.match(/(.+?)\s+(QB|RB|WR|TE|K|DST)\s+([A-Z]{2,3})/i);
-  if (pt) {
-    name = pt[1].trim();
-    pos = pt[2].toUpperCase();
-    team = pt[3].toUpperCase();
-  }
+  if (pt) { name = pt[1].trim(); pos = pt[2].toUpperCase(); team = pt[3].toUpperCase(); }
   return { tier, pos, team, name };
 }
 
@@ -89,10 +76,7 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) throw new Error("no saved state");
     const obj = JSON.parse(raw);
-    if (Array.isArray(obj)) {
-      // very old version: players[]
-      return { players: obj, history: [], settings: DEFAULT_SETTINGS };
-    }
+    if (Array.isArray(obj)) return { players: obj, history: [], settings: DEFAULT_SETTINGS };
     return {
       players: obj.players || [],
       history: obj.history || [],
@@ -101,22 +85,14 @@ function loadState() {
   } catch {
     const players = STARTERS.map((line, i) => {
       const { tier, pos, team, name } = parseImportLine(line);
-      return {
-        id: uid(),
-        name,
-        pos,
-        team,
-        tier,
-        drafted: false,
-        rank: i,
-      };
+      return { id: uid(), name, pos, team, tier, drafted: false, rank: i };
     });
     return { players, history: [], settings: DEFAULT_SETTINGS };
   }
 }
 
 /* =======================
-   UI primitives (compact)
+   UI primitives
 ======================= */
 const Button = ({ className = "", ...p }) => (
   <button
@@ -159,63 +135,37 @@ export default function App() {
   const [editNames, setEditNames] = useState(false);
   const [posTab, setPosTab] = useState("ALL");
   const [search, setSearch] = useState("");
+
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const fileInputRef = useRef(null);
 
-  // drag state for insertion line
+  // drag state
+  const listRef = useRef(null);
   const dragFromRef = useRef(null);
   const [insertIndex, setInsertIndex] = useState(null);
 
   // Dark mode
   const [dark, setDark] = useState(() => {
-    try {
-      return localStorage.getItem(DARK_KEY) === "1";
-    } catch {
-      return false;
-    }
+    try { return localStorage.getItem(DARK_KEY) === "1"; } catch { return false; }
   });
-  useEffect(() => {
-    try {
-      localStorage.setItem(DARK_KEY, dark ? "1" : "0");
-    } catch {}
-  }, [dark]);
+  useEffect(() => { try { localStorage.setItem(DARK_KEY, dark ? "1" : "0"); } catch {} }, [dark]);
 
-  // persist board state
+  // persist board
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ players, history, settings })
-      );
-    } catch {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ players, history, settings })); } catch {}
   }, [players, history, settings]);
 
   /* ------- Derived lists ------- */
-  const byRank = useMemo(
-    () => [...players].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)),
-    [players]
-  );
-  const available = useMemo(
-    () => byRank.filter((p) => !p.drafted),
-    [byRank]
-  );
+  const byRank = useMemo(() => [...players].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)), [players]);
+  const available = useMemo(() => byRank.filter((p) => !p.drafted), [byRank]);
 
-  // POS# within current available order
   const posRankMap = useMemo(() => {
-    const counts = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DST: 0 };
-    const map = {};
-    for (const p of available) {
-      const pos = p.pos || "NA";
-      if (counts[pos] !== undefined) {
-        counts[pos] += 1;
-        map[p.id] = counts[pos];
-      }
-    }
+    const counts = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DST: 0 }, map = {};
+    for (const p of available) { const pos = p.pos || "NA"; if (counts[pos] !== undefined) { counts[pos]++; map[p.id] = counts[pos]; } }
     return map;
   }, [available]);
 
-  // tabs + search live in overall column
   const filteredAvailable = useMemo(() => {
     return available.filter((p) => {
       if (posTab !== "ALL" && (p.pos || "") !== posTab) return false;
@@ -233,16 +183,14 @@ export default function App() {
 
     setPlayers((ps) => {
       const byId = Object.fromEntries(ps.map((x) => [x.id, x]));
-      // Rebuild full order: interleave ordered undrafted with drafted in original relative positions
       const merged = [];
       let u = 0;
       for (let i = 0; i < byRank.length; i++) {
         const wasDrafted = byRank[i].drafted;
-        if (wasDrafted) merged.push(byRank[i]);
-        else merged.push(orderedAvail[u++]);
+        merged.push(wasDrafted ? byRank[i] : orderedAvail[u++]);
       }
 
-      // Auto-tier: look at immediate neighbors in merged
+      // Auto-tier to neighbor(s)
       const newIndex = merged.findIndex((x) => x.id === moved.id);
       const left = merged[newIndex - 1];
       const right = merged[newIndex + 1];
@@ -283,20 +231,28 @@ export default function App() {
     setInsertIndex(null);
   };
 
-  /* ------- Drag handlers (fluid click+drag) ------- */
-  const onItemMouseDown = (overallIndex) => (e) => {
-    if (!editMode) return;
-    // nothing special; HTML5 drag will start as soon as mouse moves
-  };
+  /* ------- Drag handlers (one-motion, clear insertion) ------- */
   const onItemDragStart = (overallIndex) => (e) => {
     if (!editMode) return;
     dragFromRef.current = overallIndex;
     setInsertIndex(overallIndex);
-    // help some browsers start the drag right away
-    e.dataTransfer.setData("text/plain", String(overallIndex));
-    e.dataTransfer.effectAllowed = "move";
+
+    // make drag start immediately & hide ghost
+    try {
+      const img = new Image();
+      img.src =
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+      e.dataTransfer.setDragImage(img, 0, 0);
+      e.dataTransfer.setData("text/plain", String(overallIndex));
+      e.dataTransfer.effectAllowed = "move";
+    } catch {}
   };
-  const onItemDragEnd = () => setInsertIndex(null);
+
+  const onItemDragEnter = (overallIndex) => (e) => {
+    if (!editMode) return;
+    e.preventDefault();
+    setInsertIndex(overallIndex);
+  };
 
   const onItemDragOver = (overallIndex) => (e) => {
     if (!editMode) return;
@@ -306,16 +262,20 @@ export default function App() {
     setInsertIndex(before ? overallIndex : overallIndex + 1);
   };
 
+  const onItemDragEnd = () => setInsertIndex(null);
+
   const onListDrop = (e) => {
     if (!editMode) return;
     e.preventDefault();
+
     const fromFiltered = dragFromRef.current;
     const toFiltered = insertIndex;
+
     setInsertIndex(null);
     dragFromRef.current = null;
+
     if (fromFiltered == null || toFiltered == null) return;
 
-    // Translate filtered indexes to indexes in "available"
     const fromId = filteredAvailable[fromFiltered]?.id;
     const toAfterId =
       toFiltered >= filteredAvailable.length ? null : filteredAvailable[toFiltered]?.id;
@@ -324,7 +284,6 @@ export default function App() {
     let toIndexInAvail =
       toAfterId == null ? available.length : available.findIndex((p) => p.id === toAfterId);
 
-    // If moving downwards, account for removal
     if (fromIndexInAvail < toIndexInAvail) toIndexInAvail -= 1;
 
     if (fromIndexInAvail >= 0 && toIndexInAvail >= 0) {
@@ -336,24 +295,14 @@ export default function App() {
   const openFile = () => fileInputRef.current?.click();
 
   function parseCSV(text) {
-    // Very lightweight CSV (no quoted commas). Headers map fields.
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
     if (!lines.length) return [];
-    const headers = lines[0]
-      .split(",")
-      .map((h) => h.trim().toLowerCase());
-    const h = (nameArr) => {
-      for (const n of nameArr) {
-        const i = headers.indexOf(n);
-        if (i !== -1) return i;
-      }
-      return -1;
-    };
-    const idxTier = h(["tier"]);
-    const idxPos = h(["pos", "position"]);
-    const idxTeam = h(["team"]);
-    const idxName = h(["name", "player", "player name"]);
-
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const getIdx = (...names) => names.map(n => headers.indexOf(n)).find(i => i >= 0) ?? -1;
+    const idxTier = getIdx("tier");
+    const idxPos = getIdx("pos", "position");
+    const idxTeam = getIdx("team");
+    const idxName = getIdx("name", "player", "player name");
     const out = [];
     for (let i = 1; i < lines.length; i++) {
       const parts = lines[i].split(",").map((s) => s.trim());
@@ -369,43 +318,23 @@ export default function App() {
   }
 
   const importFromText = () => {
-    const lines = importText
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
+    const lines = importText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (!lines.length) return;
     const next = lines.map((line, i) => {
       const { tier, pos, team, name } = parseImportLine(line);
       return { id: uid(), name, pos, team, tier: tier || 1, drafted: false, rank: i };
     });
-    setPlayers(next);
-    setHistory([]);
-    setImportText("");
-    setImportOpen(false);
-    setEditMode(false);
+    setPlayers(next); setHistory([]); setImportText(""); setImportOpen(false); setEditMode(false);
   };
 
   const onCSVChosen = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result || "");
-      const rows = parseCSV(text);
-      if (!rows.length) return;
-      const next = rows.map((r, i) => ({
-        id: uid(),
-        name: r.name,
-        pos: r.pos,
-        team: r.team,
-        tier: r.tier || 1,
-        drafted: false,
-        rank: i,
-      }));
-      setPlayers(next);
-      setHistory([]);
-      setImportOpen(false);
-      setEditMode(false);
+      const rows = parseCSV(text); if (!rows.length) return;
+      const next = rows.map((r, i) => ({ id: uid(), name: r.name, pos: r.pos, team: r.team, tier: r.tier || 1, drafted: false, rank: i }));
+      setPlayers(next); setHistory([]); setImportOpen(false); setEditMode(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     };
     reader.readAsText(file);
@@ -434,75 +363,49 @@ export default function App() {
   }, [history, players, numRounds, numTeams]);
 
   const setTeamName = (i, name) =>
-    setSettings((s) => {
-      const t = [...s.teamNames];
-      t[i] = name;
-      return { ...s, teamNames: t };
-    });
+    setSettings((s) => { const t = [...s.teamNames]; t[i] = name; return { ...s, teamNames: t }; });
 
   /* ------- Rendering helpers ------- */
   const TierPill = ({ tier }) => (
-    <span
-      className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${tierClass(
-        tier
-      )}`}
-    >
+    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${tierClass(tier)}`}>
       Tier {tier || 1}
     </span>
   );
 
-  // Compact overall-ranking row
+  // Compact row
   const PlayerRow = ({ p, overallIndex, posIndex }) => (
     <li
       key={p.id}
-      className={`rounded-md border ${
-        dark ? "border-zinc-700 bg-zinc-800" : "border-gray-300 bg-white"
-      } flex items-center justify-between gap-2 p-1.5 ${
-        editMode ? "cursor-grab" : "cursor-pointer"
-      } select-none`}
+      className={`rounded-md border ${dark ? "border-zinc-700 bg-zinc-800" : "border-gray-300 bg-white"} flex items-center justify-between gap-2 p-1.5 ${editMode ? "cursor-grab" : "cursor-pointer"} select-none`}
       draggable={editMode}
-      onMouseDown={onItemMouseDown(overallIndex)}
       onDragStart={onItemDragStart(overallIndex)}
-      onDragEnd={onItemDragEnd}
+      onDragEnter={onItemDragEnter(overallIndex)}
       onDragOver={onItemDragOver(overallIndex)}
-      onClick={() => {
-        if (!editMode) draftPlayer(p.id);
-      }}
+      onDragEnd={onItemDragEnd}
+      onClick={() => { if (!editMode) draftPlayer(p.id); }}
       title={editMode ? "Drag to reorder" : "Click to draft"}
     >
       <div className="flex items-center gap-2">
-        <span className="w-5 text-[10px] opacity-70 tabular-nums">
-          {overallIndex + 1}
-        </span>
+        <span className="w-5 text-[10px] opacity-70 tabular-nums">{overallIndex + 1}</span>
         <TierPill tier={p.tier || 1} />
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-900">
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-black">
           {p.pos ? `${p.pos}${posIndex ?? ""}` : "POS"}
         </span>
-        <span className="font-semibold text-[13px]">{p.name}</span>
+        <span className="font-semibold text-[12px]">{p.name}</span>
       </div>
       <div className="text-[11px] font-medium text-black opacity-70">{p.team || ""}</div>
     </li>
   );
 
-  // Build the overall list with insertion line
   const renderOverallList = () => {
     const items = [];
     for (let i = 0; i < filteredAvailable.length; i++) {
       if (insertIndex === i && editMode) {
-        items.push(
-          <div key={`line-${i}`} className={`h-[3px] ${dark ? "bg-zinc-200" : "bg-gray-800"} rounded my-0.5`} />
-        );
+        items.push(<div key={`line-${i}`} className={`h-[3px] ${dark ? "bg-zinc-200" : "bg-gray-800"} rounded my-0.5`} />);
       }
       const p = filteredAvailable[i];
       const overallIndex = available.findIndex((x) => x.id === p.id);
-      items.push(
-        <PlayerRow
-          key={p.id}
-          p={p}
-          overallIndex={overallIndex}
-          posIndex={posRankMap[p.id]}
-        />
-      );
+      items.push(<PlayerRow key={p.id} p={p} overallIndex={overallIndex} posIndex={posRankMap[p.id]} />);
     }
     if (insertIndex === filteredAvailable.length && editMode) {
       items.push(<div key="line-end" className={`h-[3px] ${dark ? "bg-zinc-200" : "bg-gray-800"} rounded my-0.5`} />);
@@ -523,113 +426,92 @@ export default function App() {
             <IconToggle on={dark} onClick={() => setDark((v) => !v)} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => setEditMode((v) => !v)} className={`${editMode ? "bg-blue-500 text-white" : "bg-orange-300 text-gray-900"}`}>
-              {editMode ? "Done" : "Edit Order"}
-            </Button>
-            {editMode && (
-              <Button onClick={() => setImportOpen(true)} className="bg-orange-300 text-gray-900">
-                Import
-              </Button>
-            )}
+            {/* exports stay here */}
+            {/* (no Edit buttons here anymore) */}
           </div>
         </div>
 
         {/* 33% / 67% layout */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Left: Overall Rankings (col 1/3) */}
+          {/* Overall Rankings (33%) */}
           <section className={`${dark ? "bg-zinc-800" : "bg-white"} rounded-2xl shadow p-3 md:col-span-1`}>
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-bold">Overall Rankings</h2>
-              <span className="text-xs opacity-70">{available.length} available</span>
+              <div className="flex items-center gap-2">
+                {!editMode ? (
+                  <Button onClick={() => setEditMode(true)} className="bg-orange-300 text-black">Edit Order</Button>
+                ) : (
+                  <>
+                    <Button onClick={() => setImportOpen(true)} className="bg-orange-300 text-black">Import</Button>
+                    <Button onClick={() => setEditMode(false)} className="bg-blue-500 text-white">Done</Button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* colored tabs */}
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {POS_LIST.map((t) => {
-                const pastel =
-                  t === "ALL"
-                    ? "bg-gray-200"
-                    : POS_BG(t).replace("text-gray-900", "");
+                const pastel = t === "ALL" ? "bg-gray-200 text-black" : POS_BG(t);
                 const active = posTab === t ? "ring-2 ring-black" : "";
                 return (
-                  <Button
-                    key={t}
-                    className={`text-xs ${pastel} ${active}`}
-                    onClick={() => setPosTab(t)}
-                  >
+                  <Button key={t} className={`text-xs ${pastel} ${active}`} onClick={() => setPosTab(t)}>
                     {t}
                   </Button>
                 );
               })}
             </div>
             <div className="mb-2">
-              <Input
-                placeholder="Search by name / team"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <Input placeholder="Search by name / team" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
 
             <ul
+              ref={listRef}
               className="space-y-1.5 max-h-[80vh] overflow-auto pr-1"
               onDragOver={(e) => editMode && e.preventDefault()}
               onDrop={onListDrop}
             >
               {renderOverallList()}
-              {filteredAvailable.length === 0 && (
-                <li className="text-xs opacity-70">No players match.</li>
-              )}
+              {filteredAvailable.length === 0 && <li className="text-xs opacity-70">No players match.</li>}
             </ul>
           </section>
 
-          {/* Right: Draft Board (col 2/3) */}
+          {/* Draft Board (67%) */}
           <section className={`${dark ? "bg-zinc-800" : "bg-white"} rounded-2xl shadow p-3 md:col-span-2`}>
             <div className="flex items-center justify-between mb-2">
-              {/* Left side: title + Reset */}
+              {/* Left: title + Reset (orange) */}
               <div className="flex items-center gap-2">
                 <h2 className="font-bold">Draft Board</h2>
-                <Button className="bg-orange-300 text-gray-900" onClick={resetDraft}>
-                  Reset
-                </Button>
+                <Button className="bg-orange-300 text-black" onClick={resetDraft}>Reset</Button>
               </div>
-              {/* Right side: names editing + undo */}
+              {/* Right: names editing + undo */}
               <div className="flex items-center gap-2">
-                <Button
-                  className={`${editNames ? "bg-blue-500 text-white" : "bg-orange-300 text-gray-900"}`}
-                  onClick={() => setEditNames((v) => !v)}
-                >
+                <Button className={`${editNames ? "bg-blue-500 text-white" : "bg-orange-300 text-black"}`} onClick={() => setEditNames((v) => !v)}>
                   {editNames ? "Done" : "Edit Team Names"}
                 </Button>
-                <Button className="bg-teal-300 text-gray-900" onClick={undoLast} disabled={!history.length}>
+                <Button className="bg-teal-300 text-black" onClick={undoLast} disabled={!history.length}>
                   Undo
                 </Button>
               </div>
             </div>
 
-            {/* Grid board (no Rnd column) */}
+            {/* Team header and rows share SAME grid + gap + borders ⇒ perfect alignment */}
             <div className="overflow-auto">
-              {/* Team name header */}
+              {/* Team header */}
               <div
-                className="grid gap-[1px] mb-1"
-                style={{ gridTemplateColumns: `repeat(${settings.numTeams}, minmax(120px, 1fr))` }}
+                className="grid gap-2 mb-2"
+                style={{ gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))` }}
               >
                 {Array.from({ length: settings.numTeams }, (_, c) => (
-                  <div key={c} className={`${dark ? "bg-zinc-700" : "bg-gray-200"} p-2 rounded-md`}>
+                  <div key={c} className={`${dark ? "bg-zinc-700 border-zinc-700" : "bg-gray-200 border-gray-200"} border p-2 rounded-md`}>
                     {editNames ? (
                       <input
                         className={`w-full px-2 py-1 rounded border text-sm ${dark ? "bg-zinc-800 border-zinc-600 text-white" : ""}`}
                         value={settings.teamNames[c] || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setSettings((s) => {
-                            const t = [...s.teamNames];
-                            t[c] = val;
-                            return { ...s, teamNames: t };
-                          });
-                        }}
+                        onChange={(e) => setTeamName(c, e.target.value)}
                       />
                     ) : (
-                      <span className="font-semibold text-black">{settings.teamNames[c]}</span>
+                      <span className="font-semibold text-white">{settings.teamNames[c]}</span>
                     )}
                   </div>
                 ))}
@@ -640,17 +522,14 @@ export default function App() {
                 <div
                   key={r}
                   className="grid gap-2 mb-2"
-                  style={{ gridTemplateColumns: `repeat(${settings.numTeams}, minmax(120px, 1fr))` }}
+                  style={{ gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))` }}
                 >
                   {Array.from({ length: settings.numTeams }, (_, c) => {
                     const p = board[r][c];
                     return (
-                      <div
-                        key={c}
-                        className={`${dark ? "bg-zinc-900 border-zinc-700" : "bg-gray-50 border-gray-200"} border rounded-lg p-2 min-h-[36px]`}
-                      >
+                      <div key={c} className={`${dark ? "bg-zinc-900 border-zinc-700" : "bg-gray-50 border-gray-200"} border rounded-md p-2 min-h-[34px]`}>
                         {p ? (
-                          <div className={`px-2 py-1 rounded-md text-xs font-semibold ${POS_BG(p.pos)} truncate`}>
+                          <div className={`px-2 py-1 rounded-md text-[12px] font-semibold ${POS_BG(p.pos)} truncate`}>
                             {p.name}
                           </div>
                         ) : (
@@ -669,17 +548,14 @@ export default function App() {
       {/* Import Modal */}
       {importOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setImportOpen(false)}>
-          <div
-            className={`${dark ? "bg-zinc-800 text-zinc-100" : "bg-white"} w-full max-w-2xl rounded-2xl shadow p-4`}
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className={`${dark ? "bg-zinc-800 text-zinc-100" : "bg-white"} w-full max-w-2xl rounded-2xl shadow p-4`} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold">Import Players</h3>
               <Button className="bg-blue-500 text-white" onClick={() => setImportOpen(false)}>Done</Button>
             </div>
             <p className="text-xs opacity-70 mb-2">
-              Paste free text (format: <code>Tier, POS#, Team, Name</code>) or upload a CSV with headers
-              like <code>tier</code>, <code>pos</code>, <code>team</code>, <code>name</code> (any order).
+              Paste free text (<code>Tier, POS#, Team, Name</code>) or upload a CSV with headers like
+              <code> tier</code>, <code> pos</code>, <code> team</code>, <code> name</code> in any order.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -691,23 +567,13 @@ export default function App() {
                   onChange={(e) => setImportText(e.target.value)}
                 />
                 <div className="mt-2">
-                  <Button className="bg-orange-300 text-gray-900" onClick={importFromText}>
-                    Import from Text
-                  </Button>
+                  <Button className="bg-orange-300 text-black" onClick={importFromText}>Import from Text</Button>
                 </div>
               </div>
               <div className={`${dark ? "bg-zinc-900" : "bg-gray-50"} rounded-lg p-3`}>
                 <p className="text-xs mb-2">Upload CSV</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="hidden"
-                  onChange={onCSVChosen}
-                />
-                <Button className="bg-orange-300 text-gray-900" onClick={openFile}>
-                  Choose CSV…
-                </Button>
+                <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onCSVChosen} />
+                <Button className="bg-orange-300 text-black" onClick={() => fileInputRef.current?.click()}>Choose CSV…</Button>
               </div>
             </div>
           </div>
