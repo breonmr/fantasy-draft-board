@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 /* =======================
    Storage / schema
 ======================= */
-const STORAGE_KEY = "fantasy-draft-board-v6";
+const STORAGE_KEY = "fantasy-draft-board-v7";
 const DARK_KEY = "fdb_dark";
 
 const DEFAULT_SETTINGS = {
@@ -52,7 +52,14 @@ const tierClass = (tier = 1) =>
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-/* ---------- parsing ---------- */
+/* ---------- helpers ---------- */
+const norm = (s) =>
+  (s || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 function parseImportLine(line) {
   const parts = line.split(/[,\|\t]/).map((s) => s.trim()).filter(Boolean);
   if (parts.length >= 4 && /^\d+$/.test(parts[0])) {
@@ -64,7 +71,7 @@ function parseImportLine(line) {
     const name = parts.slice(3).join(" ");
     return { tier, pos, team, name };
   }
-  // fallback
+  // fallback: "Name POS TEAM T#"
   let name = line.trim(),
     pos = "",
     team = "",
@@ -86,18 +93,19 @@ function loadState() {
     if (!raw) throw new Error("no saved state");
     const obj = JSON.parse(raw);
     if (Array.isArray(obj))
-      return { players: obj, history: [], settings: DEFAULT_SETTINGS };
+      return { players: obj, history: [], settings: DEFAULT_SETTINGS, adp: {} };
     return {
       players: obj.players || [],
       history: obj.history || [],
       settings: { ...DEFAULT_SETTINGS, ...(obj.settings || {}) },
+      adp: obj.adp || {},
     };
   } catch {
     const players = STARTERS.map((line, i) => {
       const { tier, pos, team, name } = parseImportLine(line);
       return { id: uid(), name, pos, team, tier, drafted: false, rank: i };
     });
-    return { players, history: [], settings: DEFAULT_SETTINGS };
+    return { players, history: [], settings: DEFAULT_SETTINGS, adp: {} };
   }
 }
 
@@ -117,7 +125,7 @@ const IconToggle = ({ on, onClick }) => (
   <button
     onClick={onClick}
     className={`px-2 py-1 rounded-full text-xs font-semibold ${
-      on ? "bg-slate-800 text-white" : "bg-slate-200 text-slate-900"
+      on ? "bg-slate-800 text-white" : "bg-slate-300 text-slate-900"
     }`}
     title="Toggle dark mode"
   >
@@ -140,6 +148,7 @@ export default function App() {
   const [players, setPlayers] = useState(initial.players);
   const [history, setHistory] = useState(initial.history);
   const [settings, setSettings] = useState(initial.settings);
+  const [adp, setAdp] = useState(initial.adp); // { normName: { yahoo?: number, fantasypros?: number } }
 
   const [editMode, setEditMode] = useState(false);
   const [editNames, setEditNames] = useState(false);
@@ -149,15 +158,19 @@ export default function App() {
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const fileInputRef = useRef(null);
+  const adpFileRef = useRef(null);
 
   // manual drag state
-  const listRef = useRef(null);
   const itemRefs = useRef(new Map()); // id -> element
-  const rectsRef = useRef([]); // {id, mid}
+  const rectsRef = useRef([]); // {id, idx, mid}
   const [drag, setDrag] = useState(null); // {id, fromFiltered, x, y, offX, offY, w}
   const [insertIndex, setInsertIndex] = useState(null);
 
-  // Dark mode
+  // Player details
+  const [selectedId, setSelectedId] = useState(null);
+  const [sleeperMap, setSleeperMap] = useState(null); // { normName: { id, data } }
+
+  // Dark mode (lighter charcoal)
   const [dark, setDark] = useState(() => {
     try {
       return localStorage.getItem(DARK_KEY) === "1";
@@ -171,25 +184,22 @@ export default function App() {
     } catch {}
   }, [dark]);
 
-  // persist board
+  // persist
   useEffect(() => {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ players, history, settings })
+        JSON.stringify({ players, history, settings, adp })
       );
     } catch {}
-  }, [players, history, settings]);
+  }, [players, history, settings, adp]);
 
   /* ------- Derived lists ------- */
   const byRank = useMemo(
     () => [...players].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)),
     [players]
   );
-  const available = useMemo(
-    () => byRank.filter((p) => !p.drafted),
-    [byRank]
-  );
+  const available = useMemo(() => byRank.filter((p) => !p.drafted), [byRank]);
 
   const posRankMap = useMemo(() => {
     const counts = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DST: 0 },
@@ -269,7 +279,7 @@ export default function App() {
   };
 
   /* ===== Manual drag & drop (pointer events) ===== */
-  function measureRects() {
+  function measureRects(list) {
     const arr = [];
     for (let i = 0; i < filteredAvailable.length; i++) {
       const id = filteredAvailable[i].id;
@@ -285,7 +295,6 @@ export default function App() {
     if (!editMode) return;
     const el = itemRefs.current.get(id);
     if (!el) return;
-
     const r = el.getBoundingClientRect();
     measureRects();
 
@@ -300,19 +309,16 @@ export default function App() {
     });
     setInsertIndex(fromFiltered);
 
-    // global listeners
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp, { once: true });
-    document.body.classList.add("select-none"); // prevent text selection
+    document.body.classList.add("select-none");
   }
 
   function onPointerMove(e) {
     setDrag((d) => {
       if (!d) return d;
       const y = e.clientY;
-      // recompute rects (handles scrolling while dragging)
       measureRects();
-      // find insertion index by first mid below pointer
       let idx = rectsRef.current.findIndex((x) => y < x.mid);
       if (idx === -1) idx = rectsRef.current.length;
       setInsertIndex(idx);
@@ -325,22 +331,17 @@ export default function App() {
     setDrag(null);
     document.body.classList.remove("select-none");
 
-    if (d == null) return;
-
+    if (!d) return;
     const toFiltered = insertIndex ?? d.fromFiltered;
     setInsertIndex(null);
 
     const fromId = filteredAvailable[d.fromFiltered]?.id;
     const toAfterId =
-      toFiltered >= filteredAvailable.length
-        ? null
-        : filteredAvailable[toFiltered]?.id;
+      toFiltered >= filteredAvailable.length ? null : filteredAvailable[toFiltered]?.id;
 
     const fromIndexInAvail = available.findIndex((p) => p.id === fromId);
     let toIndexInAvail =
-      toAfterId == null
-        ? available.length
-        : available.findIndex((p) => p.id === toAfterId);
+      toAfterId == null ? available.length : available.findIndex((p) => p.id === toAfterId);
 
     if (fromIndexInAvail < toIndexInAvail) toIndexInAvail -= 1;
 
@@ -351,8 +352,9 @@ export default function App() {
     window.removeEventListener("pointermove", onPointerMove);
   }
 
-  /* ------- Import (modal) ------- */
+  /* ------- Import (players + ADP) ------- */
   const openFile = () => fileInputRef.current?.click();
+  const openAdp = () => adpFileRef.current?.click();
 
   function parseCSV(text) {
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
@@ -378,23 +380,41 @@ export default function App() {
     return out;
   }
 
+  function parseADPCSV(text) {
+    // expects headers: name/player, adp, source (values like yahoo, fantasypros)
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
+    if (!lines.length) return {};
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const idxName =
+      headers.indexOf("name") !== -1
+        ? headers.indexOf("name")
+        : headers.indexOf("player") !== -1
+        ? headers.indexOf("player")
+        : headers.indexOf("player name");
+    const idxAdp = headers.indexOf("adp");
+    const idxSource = headers.indexOf("source");
+    const out = {};
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(",").map((s) => s.trim());
+      const name = parts[idxName] || "";
+      const source = (parts[idxSource] || "").toLowerCase();
+      const val = parseFloat(parts[idxAdp]);
+      if (!name || !isFinite(val)) continue;
+      const k = norm(name);
+      out[k] = out[k] || {};
+      if (source.includes("yahoo")) out[k].yahoo = val;
+      if (source.includes("fantasypros") || source.includes("fp"))
+        out[k].fantasypros = val;
+    }
+    return out;
+  }
+
   const importFromText = () => {
-    const lines = importText
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
+    const lines = importText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (!lines.length) return;
     const next = lines.map((line, i) => {
       const { tier, pos, team, name } = parseImportLine(line);
-      return {
-        id: uid(),
-        name,
-        pos,
-        team,
-        tier: tier || 1,
-        drafted: false,
-        rank: i,
-      };
+      return { id: uid(), name, pos, team, tier: tier || 1, drafted: false, rank: i };
     });
     setPlayers(next);
     setHistory([]);
@@ -424,39 +444,65 @@ export default function App() {
       setHistory([]);
       setImportOpen(false);
       setEditMode(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      fileInputRef.current && (fileInputRef.current.value = "");
     };
     reader.readAsText(file);
   };
 
-  /* ------- Draft board (snake) ------- */
-  const { numTeams, numRounds, teamNames } = settings;
+  const onADPChosen = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || "");
+      const map = parseADPCSV(text);
+      if (!Object.keys(map).length) return;
+      setAdp((cur) => ({ ...cur, ...map }));
+      alert("ADP data imported.");
+      adpFileRef.current && (adpFileRef.current.value = "");
+    };
+    reader.readAsText(file);
+  };
 
-  function pickToCoord(pickIndex) {
-    const r = Math.floor(pickIndex / numTeams);
-    const i = pickIndex % numTeams;
-    const c = r % 2 === 0 ? i : numTeams - 1 - i;
-    return { row: r, col: c };
-  }
+  /* ------- Player Details (Sleeper) ------- */
+  useEffect(() => {
+    // lazy load Sleeper players index on first open
+    if (!selectedId || sleeperMap) return;
+    (async () => {
+      try {
+        const res = await fetch("https://api.sleeper.app/v1/players/nfl");
+        const obj = await res.json();
+        const map = {};
+        for (const pid in obj) {
+          const p = obj[pid];
+          if (!p || !p.full_name) continue;
+          map[norm(p.full_name)] = { id: pid, data: p };
+        }
+        setSleeperMap(map);
+      } catch (e) {
+        // ignore; we'll just show placeholders
+      }
+    })();
+  }, [selectedId, sleeperMap]);
 
-  const board = useMemo(() => {
-    const grid = Array.from({ length: numRounds }, () =>
-      Array.from({ length: numTeams }, () => null)
-    );
-    history.forEach((id, k) => {
-      const { row, col } = pickToCoord(k);
-      const p = players.find((x) => x.id === id);
-      if (p && row < numRounds) grid[row][col] = p;
-    });
-    return grid;
-  }, [history, players, numRounds, numTeams]);
+  const selected = selectedId
+    ? players.find((p) => p.id === selectedId)
+    : null;
+  const selectedSleeper = useMemo(() => {
+    if (!sleeperMap || !selected) return null;
+    const k = norm(selected.name);
+    return sleeperMap[k] || null;
+  }, [sleeperMap, selected]);
 
-  const setTeamName = (i, name) =>
-    setSettings((s) => {
-      const t = [...s.teamNames];
-      t[i] = name;
-      return { ...s, teamNames: t };
-    });
+  const selectedADP = useMemo(() => {
+    if (!selected) return {};
+    return adp[norm(selected.name)] || {};
+  }, [adp, selected]);
+
+  const headshotUrl = selectedSleeper
+    ? // Sleeper headshot CDN
+      `https://sleepercdn.com/content/nfl/players/thumb/${selectedSleeper.id}.jpg`
+    : null;
 
   /* ------- Rendering helpers ------- */
   const TierPill = ({ tier }) => (
@@ -469,7 +515,7 @@ export default function App() {
     </span>
   );
 
-  // Compact row
+  // Player row with Draft button + clickable name (opens details)
   const PlayerRow = ({ p, overallIndex, posIndex }) => {
     const beingDragged = drag?.id === p.id;
     return (
@@ -480,20 +526,17 @@ export default function App() {
           el ? itemRefs.current.set(p.id, el) : itemRefs.current.delete(p.id)
         }
         className={`rounded-md border ${
-          dark ? "border-zinc-700 bg-zinc-800" : "border-gray-300 bg-white"
+          dark ? "border-zinc-600 bg-zinc-700" : "border-gray-300 bg-white"
         } flex items-center justify-between gap-2 p-1.5 ${
-          editMode ? "cursor-grab" : "cursor-pointer"
+          editMode ? "cursor-grab" : "cursor-default"
         } select-none ${beingDragged ? "opacity-40" : ""}`}
         onPointerDown={(e) => {
           if (!editMode) return;
           startDrag(e, p.id, overallIndex);
         }}
-        onClick={() => {
-          if (!editMode) draftPlayer(p.id);
-        }}
-        title={editMode ? "Drag to reorder" : "Click to draft"}
+        title={editMode ? "Drag to reorder" : "Click Draft to draft"}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="w-5 text-[10px] opacity-70 tabular-nums">
             {overallIndex + 1}
           </span>
@@ -501,10 +544,28 @@ export default function App() {
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-black">
             {p.pos ? `${p.pos}${posIndex ?? ""}` : "POS"}
           </span>
-          <span className="font-semibold text-[12px]">{p.name}</span>
+          <button
+            className="font-semibold text-[12px] hover:underline truncate"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedId(p.id);
+            }}
+            title="Show details"
+          >
+            {p.name}
+          </button>
+          <span className="text-[11px] opacity-70 shrink-0">{p.team || ""}</span>
         </div>
-        <div className="text-[11px] font-medium text-black opacity-70">
-          {p.team || ""}
+        <div className="shrink-0">
+          <Button
+            className="bg-green-400 text-black"
+            onClick={(e) => {
+              e.stopPropagation();
+              draftPlayer(p.id);
+            }}
+          >
+            Draft
+          </Button>
         </div>
       </li>
     );
@@ -545,9 +606,8 @@ export default function App() {
     return items;
   };
 
-  const draggingPlayer = drag
-    ? players.find((p) => p.id === drag.id)
-    : null;
+  // Selection (drag overlay)
+  const draggingPlayer = drag ? players.find((p) => p.id === drag.id) : null;
 
   /* =======================
      Render
@@ -555,7 +615,7 @@ export default function App() {
   return (
     <div
       className={`${
-        dark ? "bg-zinc-900 text-zinc-100" : "bg-gray-50 text-gray-900"
+        dark ? "bg-zinc-800 text-zinc-100" : "bg-gray-50 text-gray-900"
       } min-h-screen w-full`}
     >
       <div className="w-full px-3 md:px-4 py-3 space-y-3">
@@ -570,13 +630,13 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-2" />
         </div>
 
-        {/* 33% / 67% layout */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Overall Rankings (33%) */}
+        {/* 30% / 70% layout (3 / 7) */}
+        <div className="grid grid-cols-1 md:grid-cols-10 gap-3">
+          {/* Overall Rankings (30%) */}
           <section
             className={`${
-              dark ? "bg-zinc-800" : "bg-white"
-            } rounded-2xl shadow p-3 md:col-span-1`}
+              dark ? "bg-zinc-700" : "bg-white"
+            } rounded-2xl shadow p-3 md:col-span-3`}
           >
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-bold">Overall Rankings</h2>
@@ -632,10 +692,7 @@ export default function App() {
               />
             </div>
 
-            <ul
-              ref={listRef}
-              className="space-y-1.5 max-h-[80vh] overflow-auto pr-1"
-            >
+            <ul className="space-y-1.5 max-h-[80vh] overflow-auto pr-1">
               {renderOverallList()}
               {filteredAvailable.length === 0 && (
                 <li className="text-xs opacity-70">No players match.</li>
@@ -643,21 +700,19 @@ export default function App() {
             </ul>
           </section>
 
-          {/* Draft Board (67%) */}
+          {/* Draft Board + Details (70%) */}
           <section
             className={`${
-              dark ? "bg-zinc-800" : "bg-white"
-            } rounded-2xl shadow p-3 md:col-span-2`}
+              dark ? "bg-zinc-700" : "bg-white"
+            } rounded-2xl shadow p-3 md:col-span-7`}
           >
             <div className="flex items-center justify-between mb-2">
-              {/* Left: title + Reset (orange) */}
               <div className="flex items-center gap-2">
                 <h2 className="font-bold">Draft Board</h2>
                 <Button className="bg-orange-300 text-black" onClick={resetDraft}>
                   Reset
                 </Button>
               </div>
-              {/* Right: names editing + undo */}
               <div className="flex items-center gap-2">
                 <Button
                   className={`${
@@ -677,73 +732,174 @@ export default function App() {
               </div>
             </div>
 
-            {/* Team header and rows share SAME grid + gap + borders ⇒ perfect alignment */}
-            <div className="overflow-auto">
-              {/* Team header */}
+            {/* Team header */}
+            <div
+              className="grid gap-2 mb-2"
+              style={{
+                gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
+              }}
+            >
+              {Array.from({ length: settings.numTeams }, (_, c) => (
+                <div
+                  key={c}
+                  className={`${
+                    dark
+                      ? "bg-zinc-600 border-zinc-600"
+                      : "bg-gray-200 border-gray-200"
+                  } border p-2 rounded-md`}
+                >
+                  {editNames ? (
+                    <input
+                      className={`w-full px-2 py-1 rounded border text-sm ${
+                        dark ? "bg-zinc-700 border-zinc-500 text-white" : ""
+                      }`}
+                      value={settings.teamNames[c] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettings((s) => {
+                          const t = [...s.teamNames];
+                          t[c] = val;
+                          return { ...s, teamNames: t };
+                        });
+                      }}
+                    />
+                  ) : (
+                    <span className="font-semibold text-zinc-200">
+                      {settings.teamNames[c]}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Rows */}
+            {Array.from({ length: settings.numRounds }, (_, r) => (
               <div
+                key={r}
                 className="grid gap-2 mb-2"
                 style={{
                   gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
                 }}
               >
-                {Array.from({ length: settings.numTeams }, (_, c) => (
-                  <div
-                    key={c}
-                    className={`${
-                      dark ? "bg-zinc-700 border-zinc-700" : "bg-gray-200 border-gray-200"
-                    } border p-2 rounded-md`}
-                  >
-                    {editNames ? (
-                      <input
-                        className={`w-full px-2 py-1 rounded border text-sm ${
-                          dark ? "bg-zinc-800 border-zinc-600 text-white" : ""
-                        }`}
-                        value={settings.teamNames[c] || ""}
-                        onChange={(e) => setTeamName(c, e.target.value)}
-                      />
+                {Array.from({ length: settings.numTeams }, (_, c) => {
+                  const id = history[r * settings.numTeams + (r % 2 === 0 ? c : settings.numTeams - 1 - c)];
+                  const p = id ? players.find((x) => x.id === id) : null;
+                  return (
+                    <div
+                      key={c}
+                      className={`${
+                        dark ? "bg-zinc-800 border-zinc-600" : "bg-gray-50 border-gray-200"
+                      } border rounded-md p-2 min-h-[34px]`}
+                    >
+                      {p ? (
+                        <div
+                          className={`px-2 py-1 rounded-md text-[12px] font-semibold ${POS_BG(
+                            p.pos
+                          )} truncate`}
+                        >
+                          {p.name}
+                        </div>
+                      ) : (
+                        <div className="text-gray-300 text-xs">—</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* Player Details (lower right) */}
+            <div className={`${dark ? "bg-zinc-800" : "bg-gray-50"} rounded-xl p-3 mt-3`}>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-sm">Player Details</h3>
+                {selected && (
+                  <span className="text-xs opacity-70">
+                    Click a player name in Overall Rankings to view
+                  </span>
+                )}
+              </div>
+              {!selected ? (
+                <div className="text-sm opacity-70">No player selected.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-10 gap-3">
+                  {/* Photo + basics */}
+                  <div className="md:col-span-3 flex gap-3 items-start">
+                    <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-200 shrink-0">
+                      {headshotUrl ? (
+                        <img src={headshotUrl} alt={selected.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500">
+                          {selected.name.split(" ").map(s=>s[0]).join("").slice(0,2).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold truncate">{selected.name}</div>
+                      <div className="text-xs opacity-80">
+                        {selected.pos || "POS"} • {selected.team || "TEAM"}
+                      </div>
+                      <div className="mt-1 text-xs flex gap-2 items-center">
+                        <span className={`px-1.5 py-0.5 rounded-full ${tierClass(selected.tier || 1)}`}>
+                          Tier {selected.tier || 1}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="md:col-span-3">
+                    <div className="font-semibold text-xs mb-1">Stats (basic)</div>
+                    {selectedSleeper ? (
+                      <ul className="text-xs space-y-0.5">
+                        <li>Age: {selectedSleeper.data.age ?? "—"}</li>
+                        <li>Height: {selectedSleeper.data.height ?? "—"}</li>
+                        <li>Weight: {selectedSleeper.data.weight ?? "—"}</li>
+                        <li>College: {selectedSleeper.data.college ?? "—"}</li>
+                      </ul>
                     ) : (
-                      <span className="font-semibold text-white">
-                        {settings.teamNames[c]}
-                      </span>
+                      <div className="text-xs opacity-70">Stats unavailable (no match yet).</div>
                     )}
                   </div>
-                ))}
-              </div>
 
-              {/* Rows */}
-              {Array.from({ length: settings.numRounds }, (_, r) => (
-                <div
-                  key={r}
-                  className="grid gap-2 mb-2"
-                  style={{
-                    gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
-                  }}
-                >
-                  {Array.from({ length: settings.numTeams }, (_, c) => {
-                    const p = board[r][c];
-                    return (
-                      <div
-                        key={c}
-                        className={`${
-                          dark ? "bg-zinc-900 border-zinc-700" : "bg-gray-50 border-gray-200"
-                        } border rounded-md p-2 min-h-[34px]`}
-                      >
-                        {p ? (
-                          <div
-                            className={`px-2 py-1 rounded-md text-[12px] font-semibold ${POS_BG(
-                              p.pos
-                            )} truncate`}
-                          >
-                            {p.name}
-                          </div>
-                        ) : (
-                          <div className="text-gray-300 text-xs">—</div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {/* ADP */}
+                  <div className="md:col-span-2">
+                    <div className="font-semibold text-xs mb-1">ADP</div>
+                    <ul className="text-xs space-y-0.5">
+                      <li>Yahoo: {selectedADP.yahoo ?? "—"}</li>
+                      <li>FantasyPros: {selectedADP.fantasypros ?? "—"}</li>
+                    </ul>
+                    <div className="mt-2">
+                      <Button className="bg-orange-300 text-black" onClick={openAdp}>Import ADP CSV</Button>
+                      <input ref={adpFileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onADPChosen} />
+                    </div>
+                  </div>
+
+                  {/* News links */}
+                  <div className="md:col-span-2">
+                    <div className="font-semibold text-xs mb-1">Recent News</div>
+                    <ul className="text-xs space-y-1">
+                      <li>
+                        <a
+                          className="underline"
+                          href={`https://news.google.com/search?q=${encodeURIComponent(selected.name + " NFL")}`}
+                          target="_blank" rel="noreferrer"
+                        >
+                          Google News
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          className="underline"
+                          href={`https://www.fantasypros.com/search/?query=${encodeURIComponent(selected.name)}`}
+                          target="_blank" rel="noreferrer"
+                        >
+                          FantasyPros News
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           </section>
         </div>
@@ -757,12 +913,12 @@ export default function App() {
         >
           <div
             className={`${
-              dark ? "bg-zinc-800 text-zinc-100" : "bg-white"
-            } w-full max-w-2xl rounded-2xl shadow p-4`}
+              dark ? "bg-zinc-700 text-zinc-100" : "bg-white"
+            } w-full max-w-3xl rounded-2xl shadow p-4`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold">Import Players</h3>
+              <h3 className="font-bold">Import</h3>
               <Button
                 className="bg-blue-500 text-white"
                 onClick={() => setImportOpen(false)}
@@ -770,46 +926,61 @@ export default function App() {
                 Done
               </Button>
             </div>
-            <p className="text-xs opacity-70 mb-2">
-              Paste free text (<code>Tier, POS#, Team, Name</code>) or upload a
-              CSV with headers like <code>tier</code>, <code>pos</code>,{" "}
-              <code>team</code>, <code>name</code> in any order.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Players */}
               <div>
+                <div className="font-semibold text-sm mb-1">Players (replace list)</div>
+                <p className="text-xs opacity-70 mb-2">
+                  Paste free text (<code>Tier, POS#, Team, Name</code>) or upload CSV with headers in any order:
+                  <code> tier</code>, <code> pos/position</code>, <code> team</code>, <code> name</code>.
+                </p>
                 <textarea
                   rows={8}
                   className={`w-full rounded-lg border px-2 py-1.5 text-sm ${
-                    dark ? "bg-zinc-900 border-zinc-700" : ""
+                    dark ? "bg-zinc-800 border-zinc-600" : ""
                   }`}
                   placeholder={`Examples:\n1, WR1, LAR, Puka Nacua\n1, RB1, NYJ, Breece Hall\n2, TE1, DET, Sam LaPorta`}
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                 />
-                <div className="mt-2">
-                  <Button
-                    className="bg-orange-300 text-black"
-                    onClick={importFromText}
-                  >
+                <div className="mt-2 flex gap-2">
+                  <Button className="bg-orange-300 text-black" onClick={importFromText}>
                     Import from Text
                   </Button>
+                  <Button className="bg-orange-300 text-black" onClick={openFile}>
+                    Choose CSV…
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={onCSVChosen}
+                  />
                 </div>
               </div>
-              <div className={`${dark ? "bg-zinc-900" : "bg-gray-50"} rounded-lg p-3`}>
-                <p className="text-xs mb-2">Upload CSV</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="hidden"
-                  onChange={onCSVChosen}
-                />
-                <Button
-                  className="bg-orange-300 text-black"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Choose CSV…
-                </Button>
+
+              {/* ADP */}
+              <div>
+                <div className="font-semibold text-sm mb-1">ADP (merge)</div>
+                <p className="text-xs opacity-70 mb-2">
+                  Upload a CSV with columns <code>name</code> (or <code>player</code>),{" "}
+                  <code>adp</code>, and <code>source</code> (values like{" "}
+                  <em>yahoo</em> or <em>fantasypros</em>). This won’t change your player list.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <Button className="bg-orange-300 text-black" onClick={openAdp}>
+                    Choose ADP CSV…
+                  </Button>
+                  <input
+                    ref={adpFileRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={onADPChosen}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -832,9 +1003,7 @@ export default function App() {
         >
           <div className="flex items-center justify-between gap-2 p-1.5">
             <div className="flex items-center gap-2">
-              <span className="w-5 text-[10px] opacity-70 tabular-nums">
-                {/* rank placeholder while dragging */}
-              </span>
+              <span className="w-5 text-[10px] opacity-70 tabular-nums"></span>
               <span
                 className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${tierClass(
                   draggingPlayer.tier || 1
@@ -848,9 +1017,7 @@ export default function App() {
               <span className="font-semibold text-[12px]">
                 {draggingPlayer.name}
               </span>
-            </div>
-            <div className="text-[11px] font-medium text-black opacity-70">
-              {draggingPlayer.team || ""}
+              <span className="text-[11px] opacity-70">{draggingPlayer.team || ""}</span>
             </div>
           </div>
         </div>
