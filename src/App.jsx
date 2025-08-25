@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 /* =======================
    Storage / schema
 ======================= */
-const STORAGE_KEY = "fantasy-draft-board-v7";
+const STORAGE_KEY = "fantasy-draft-board-v8";
 const DARK_KEY = "fdb_dark";
 
 const DEFAULT_SETTINGS = {
@@ -14,21 +14,21 @@ const DEFAULT_SETTINGS = {
 
 // seed — replace via Import
 const STARTERS = [
-  "1, WR1, CIN, Ja'Marr Chase",
-  "1, WR1, MIN, Justin Jefferson",
-  "1, RB1, SF, Christian McCaffrey",
-  "1, WR1, DAL, CeeDee Lamb",
-  "1, RB1, ATL, Bijan Robinson",
-  "1, RB1, NYJ, Breece Hall",
-  "1, WR1, DET, Amon-Ra St. Brown",
-  "1, WR1, MIA, Tyreek Hill",
-  "1, WR1, NYJ, Garrett Wilson",
-  "2, RB1, IND, Jonathan Taylor",
+  "1, WR, CIN, Ja'Marr Chase",
+  "1, WR, MIN, Justin Jefferson",
+  "1, RB, SF, Christian McCaffrey",
+  "1, WR, DAL, CeeDee Lamb",
+  "1, RB, ATL, Bijan Robinson",
+  "1, RB, NYJ, Breece Hall",
+  "1, WR, DET, Amon-Ra St. Brown",
+  "1, WR, MIA, Tyreek Hill",
+  "1, WR, NYJ, Garrett Wilson",
+  "2, RB, IND, Jonathan Taylor",
 ];
 
 const POS_LIST = ["ALL", "RB", "WR", "QB", "TE", "K", "DST"];
 
-/* Pastel board colors by position (also used on tabs) */
+/* Pastel board colors by position (used on tabs & board) */
 const POS_BG = (pos) => {
   const p = (pos || "").toUpperCase();
   if (p === "WR") return "bg-blue-300 text-black";
@@ -37,6 +37,16 @@ const POS_BG = (pos) => {
   if (p === "QB") return "bg-pink-300 text-black";
   if (p === "DST" || p === "DEF") return "bg-gray-300 text-black";
   return "bg-gray-300 text-black";
+};
+/* Small dot for overall list rows to match position color */
+const POS_DOT = (pos) => {
+  const p = (pos || "").toUpperCase();
+  if (p === "WR") return "bg-blue-300";
+  if (p === "RB") return "bg-green-300";
+  if (p === "TE") return "bg-orange-300";
+  if (p === "QB") return "bg-pink-300";
+  if (p === "DST" || p === "DEF") return "bg-gray-300";
+  return "bg-gray-300";
 };
 
 /* Pastel tier colors — distinct from POS; loop after 5 */
@@ -61,6 +71,7 @@ const norm = (s) =>
     .trim();
 
 function parseImportLine(line) {
+  // Accept: "Tier, POS, Team, Name" (no POS# required)
   const parts = line.split(/[,\|\t]/).map((s) => s.trim()).filter(Boolean);
   if (parts.length >= 4 && /^\d+$/.test(parts[0])) {
     const tier = Math.max(1, parseInt(parts[0], 10) || 1);
@@ -148,7 +159,7 @@ export default function App() {
   const [players, setPlayers] = useState(initial.players);
   const [history, setHistory] = useState(initial.history);
   const [settings, setSettings] = useState(initial.settings);
-  const [adp, setAdp] = useState(initial.adp); // { normName: { yahoo?: number, fantasypros?: number } }
+  const [adp, setAdp] = useState(initial.adp);
 
   const [editMode, setEditMode] = useState(false);
   const [editNames, setEditNames] = useState(false);
@@ -160,7 +171,7 @@ export default function App() {
   const fileInputRef = useRef(null);
   const adpFileRef = useRef(null);
 
-  // manual drag state
+  // manual drag state (one-click drag)
   const itemRefs = useRef(new Map()); // id -> element
   const rectsRef = useRef([]); // {id, idx, mid}
   const [drag, setDrag] = useState(null); // {id, fromFiltered, x, y, offX, offY, w}
@@ -201,6 +212,7 @@ export default function App() {
   );
   const available = useMemo(() => byRank.filter((p) => !p.drafted), [byRank]);
 
+  // Dynamic position numbering (RB1/RB2/etc.) based on current available order
   const posRankMap = useMemo(() => {
     const counts = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DST: 0 },
       map = {};
@@ -279,7 +291,7 @@ export default function App() {
   };
 
   /* ===== Manual drag & drop (pointer events) ===== */
-  function measureRects(list) {
+  function measureRects() {
     const arr = [];
     for (let i = 0; i < filteredAvailable.length; i++) {
       const id = filteredAvailable[i].id;
@@ -381,7 +393,6 @@ export default function App() {
   }
 
   function parseADPCSV(text) {
-    // expects headers: name/player, adp, source (values like yahoo, fantasypros)
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
     if (!lines.length) return {};
     const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
@@ -464,9 +475,8 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  /* ------- Player Details (Sleeper) ------- */
+  /* ------- Sleeper (for details) ------- */
   useEffect(() => {
-    // lazy load Sleeper players index on first open
     if (!selectedId || sleeperMap) return;
     (async () => {
       try {
@@ -479,29 +489,22 @@ export default function App() {
           map[norm(p.full_name)] = { id: pid, data: p };
         }
         setSleeperMap(map);
-      } catch (e) {
-        // ignore; we'll just show placeholders
-      }
+      } catch {}
     })();
   }, [selectedId, sleeperMap]);
 
-  const selected = selectedId
-    ? players.find((p) => p.id === selectedId)
-    : null;
+  const selected = selectedId ? players.find((p) => p.id === selectedId) : null;
   const selectedSleeper = useMemo(() => {
     if (!sleeperMap || !selected) return null;
     const k = norm(selected.name);
     return sleeperMap[k] || null;
   }, [sleeperMap, selected]);
-
   const selectedADP = useMemo(() => {
     if (!selected) return {};
     return adp[norm(selected.name)] || {};
   }, [adp, selected]);
-
   const headshotUrl = selectedSleeper
-    ? // Sleeper headshot CDN
-      `https://sleepercdn.com/content/nfl/players/thumb/${selectedSleeper.id}.jpg`
+    ? `https://sleepercdn.com/content/nfl/players/thumb/${selectedSleeper.id}.jpg`
     : null;
 
   /* ------- Rendering helpers ------- */
@@ -515,7 +518,7 @@ export default function App() {
     </span>
   );
 
-  // Player row with Draft button + clickable name (opens details)
+  // Player row (name opens details only when not editing; Draft button hidden in edit mode)
   const PlayerRow = ({ p, overallIndex, posIndex }) => {
     const beingDragged = drag?.id === p.id;
     return (
@@ -534,9 +537,13 @@ export default function App() {
           if (!editMode) return;
           startDrag(e, p.id, overallIndex);
         }}
-        title={editMode ? "Drag to reorder" : "Click Draft to draft"}
+        title={
+          editMode ? "Drag to reorder" : "Click Draft to draft; click name for details"
+        }
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          {/* position color dot */}
+          <span className={`w-2 h-2 rounded-full ${POS_DOT(p.pos)} shrink-0`} />
           <span className="w-5 text-[10px] opacity-70 tabular-nums">
             {overallIndex + 1}
           </span>
@@ -544,29 +551,48 @@ export default function App() {
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-black">
             {p.pos ? `${p.pos}${posIndex ?? ""}` : "POS"}
           </span>
-          <button
-            className="font-semibold text-[12px] hover:underline truncate"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedId(p.id);
-            }}
-            title="Show details"
-          >
-            {p.name}
-          </button>
-          <span className="text-[11px] opacity-70 shrink-0">{p.team || ""}</span>
+
+          {/* Name + team */}
+          {!editMode ? (
+            <>
+              <button
+                className="font-semibold text-[12px] hover:underline truncate"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedId(p.id);
+                }}
+                title="Show details"
+              >
+                {p.name}
+              </button>
+              <span className="text-[11px] opacity-70 shrink-0">
+                {p.team || ""}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-[12px] truncate">{p.name}</span>
+              <span className="text-[11px] opacity-70 shrink-0">
+                {p.team || ""}
+              </span>
+            </>
+          )}
         </div>
-        <div className="shrink-0">
-          <Button
-            className="bg-green-400 text-black"
-            onClick={(e) => {
-              e.stopPropagation();
-              draftPlayer(p.id);
-            }}
-          >
-            Draft
-          </Button>
-        </div>
+
+        {/* Draft button only when NOT editing */}
+        {!editMode && (
+          <div className="shrink-0">
+            <Button
+              className="bg-blue-900 text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                draftPlayer(p.id);
+              }}
+            >
+              Draft
+            </Button>
+          </div>
+        )}
       </li>
     );
   };
@@ -606,7 +632,6 @@ export default function App() {
     return items;
   };
 
-  // Selection (drag overlay)
   const draggingPlayer = drag ? players.find((p) => p.id === drag.id) : null;
 
   /* =======================
@@ -646,7 +671,7 @@ export default function App() {
                     onClick={() => setEditMode(true)}
                     className="bg-orange-300 text-black"
                   >
-                    Edit Order
+                    Edit
                   </Button>
                 ) : (
                   <>
@@ -667,7 +692,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* colored tabs */}
+            {/* colored tabs (match board colors) */}
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {POS_LIST.map((t) => {
                 const pastel =
@@ -732,91 +757,100 @@ export default function App() {
               </div>
             </div>
 
-            {/* Team header */}
-            <div
-              className="grid gap-2 mb-2"
-              style={{
-                gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
-              }}
-            >
-              {Array.from({ length: settings.numTeams }, (_, c) => (
-                <div
-                  key={c}
-                  className={`${
-                    dark
-                      ? "bg-zinc-600 border-zinc-600"
-                      : "bg-gray-200 border-gray-200"
-                  } border p-2 rounded-md`}
-                >
-                  {editNames ? (
-                    <input
-                      className={`w-full px-2 py-1 rounded border text-sm ${
-                        dark ? "bg-zinc-700 border-zinc-500 text-white" : ""
-                      }`}
-                      value={settings.teamNames[c] || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSettings((s) => {
-                          const t = [...s.teamNames];
-                          t[c] = val;
-                          return { ...s, teamNames: t };
-                        });
-                      }}
-                    />
-                  ) : (
-                    <span className="font-semibold text-zinc-200">
-                      {settings.teamNames[c]}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Rows */}
-            {Array.from({ length: settings.numRounds }, (_, r) => (
+            {/* One horizontal scroll container that wraps header + rows */}
+            <div className="overflow-x-auto overflow-y-visible">
+              {/* Team header */}
               <div
-                key={r}
                 className="grid gap-2 mb-2"
                 style={{
                   gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
                 }}
               >
-                {Array.from({ length: settings.numTeams }, (_, c) => {
-                  const id = history[r * settings.numTeams + (r % 2 === 0 ? c : settings.numTeams - 1 - c)];
-                  const p = id ? players.find((x) => x.id === id) : null;
-                  return (
-                    <div
-                      key={c}
-                      className={`${
-                        dark ? "bg-zinc-800 border-zinc-600" : "bg-gray-50 border-gray-200"
-                      } border rounded-md p-2 min-h-[34px]`}
-                    >
-                      {p ? (
-                        <div
-                          className={`px-2 py-1 rounded-md text-[12px] font-semibold ${POS_BG(
-                            p.pos
-                          )} truncate`}
-                        >
-                          {p.name}
-                        </div>
-                      ) : (
-                        <div className="text-gray-300 text-xs">—</div>
-                      )}
-                    </div>
-                  );
-                })}
+                {Array.from({ length: settings.numTeams }, (_, c) => (
+                  <div
+                    key={c}
+                    className={`${
+                      dark
+                        ? "bg-zinc-600 border-zinc-600"
+                        : "bg-gray-200 border-gray-200"
+                    } border p-2 rounded-md`}
+                  >
+                    {editNames ? (
+                      <input
+                        className={`w-full px-2 py-1 rounded border text-sm ${
+                          dark ? "bg-zinc-700 border-zinc-500 text-white" : ""
+                        }`}
+                        value={settings.teamNames[c] || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSettings((s) => {
+                            const t = [...s.teamNames];
+                            t[c] = val;
+                            return { ...s, teamNames: t };
+                          });
+                        }}
+                      />
+                    ) : (
+                      <span className={`font-semibold ${dark ? "text-zinc-200" : "text-black"}`}>
+                        {settings.teamNames[c]}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
 
-            {/* Player Details (lower right) */}
-            <div className={`${dark ? "bg-zinc-800" : "bg-gray-50"} rounded-xl p-3 mt-3`}>
+              {/* Rows */}
+              {Array.from({ length: settings.numRounds }, (_, r) => (
+                <div
+                  key={r}
+                  className="grid gap-2 mb-2"
+                  style={{
+                    gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
+                  }}
+                >
+                  {Array.from({ length: settings.numTeams }, (_, c) => {
+                    const id =
+                      history[
+                        r * settings.numTeams +
+                          (r % 2 === 0 ? c : settings.numTeams - 1 - c)
+                      ];
+                    const p = id ? players.find((x) => x.id === id) : null;
+                    return (
+                      <div
+                        key={c}
+                        className={`${
+                          dark
+                            ? "bg-zinc-800 border-zinc-600"
+                            : "bg-gray-50 border-gray-200"
+                        } border rounded-md p-2 min-h-[34px]`}
+                      >
+                        {p ? (
+                          <div
+                            className={`px-2 py-1 rounded-md text-[12px] font-semibold ${POS_BG(
+                              p.pos
+                            )} truncate`}
+                          >
+                            {p.name}
+                          </div>
+                        ) : (
+                          <div className="text-gray-300 text-xs">—</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            {/* Player Details (full width of the board section) */}
+            <div
+              className={`${dark ? "bg-zinc-800" : "bg-gray-50"} rounded-xl p-3 mt-3 w-full`}
+            >
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-semibold text-sm">Player Details</h3>
-                {selected && (
-                  <span className="text-xs opacity-70">
-                    Click a player name in Overall Rankings to view
-                  </span>
-                )}
+                <span className="text-xs opacity-70">
+                  Click a player name in Overall Rankings to view
+                </span>
               </div>
               {!selected ? (
                 <div className="text-sm opacity-70">No player selected.</div>
@@ -826,10 +860,19 @@ export default function App() {
                   <div className="md:col-span-3 flex gap-3 items-start">
                     <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-200 shrink-0">
                       {headshotUrl ? (
-                        <img src={headshotUrl} alt={selected.name} className="w-full h-full object-cover" />
+                        <img
+                          src={headshotUrl}
+                          alt={selected.name}
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-500">
-                          {selected.name.split(" ").map(s=>s[0]).join("").slice(0,2).toUpperCase()}
+                          {selected.name
+                            .split(" ")
+                            .map((s) => s[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()}
                         </div>
                       )}
                     </div>
@@ -839,7 +882,11 @@ export default function App() {
                         {selected.pos || "POS"} • {selected.team || "TEAM"}
                       </div>
                       <div className="mt-1 text-xs flex gap-2 items-center">
-                        <span className={`px-1.5 py-0.5 rounded-full ${tierClass(selected.tier || 1)}`}>
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full ${tierClass(
+                            selected.tier || 1
+                          )}`}
+                        >
                           Tier {selected.tier || 1}
                         </span>
                       </div>
@@ -857,7 +904,9 @@ export default function App() {
                         <li>College: {selectedSleeper.data.college ?? "—"}</li>
                       </ul>
                     ) : (
-                      <div className="text-xs opacity-70">Stats unavailable (no match yet).</div>
+                      <div className="text-xs opacity-70">
+                        Stats unavailable (no match yet).
+                      </div>
                     )}
                   </div>
 
@@ -869,8 +918,19 @@ export default function App() {
                       <li>FantasyPros: {selectedADP.fantasypros ?? "—"}</li>
                     </ul>
                     <div className="mt-2">
-                      <Button className="bg-orange-300 text-black" onClick={openAdp}>Import ADP CSV</Button>
-                      <input ref={adpFileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onADPChosen} />
+                      <Button
+                        className="bg-orange-300 text-black"
+                        onClick={openAdp}
+                      >
+                        Import ADP CSV
+                      </Button>
+                      <input
+                        ref={adpFileRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="hidden"
+                        onChange={onADPChosen}
+                      />
                     </div>
                   </div>
 
@@ -881,8 +941,11 @@ export default function App() {
                       <li>
                         <a
                           className="underline"
-                          href={`https://news.google.com/search?q=${encodeURIComponent(selected.name + " NFL")}`}
-                          target="_blank" rel="noreferrer"
+                          href={`https://news.google.com/search?q=${encodeURIComponent(
+                            selected.name + " NFL"
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
                         >
                           Google News
                         </a>
@@ -890,8 +953,11 @@ export default function App() {
                       <li>
                         <a
                           className="underline"
-                          href={`https://www.fantasypros.com/search/?query=${encodeURIComponent(selected.name)}`}
-                          target="_blank" rel="noreferrer"
+                          href={`https://www.fantasypros.com/search/?query=${encodeURIComponent(
+                            selected.name
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
                         >
                           FantasyPros News
                         </a>
@@ -930,25 +996,35 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Players */}
               <div>
-                <div className="font-semibold text-sm mb-1">Players (replace list)</div>
+                <div className="font-semibold text-sm mb-1">
+                  Players (replace list)
+                </div>
                 <p className="text-xs opacity-70 mb-2">
-                  Paste free text (<code>Tier, POS#, Team, Name</code>) or upload CSV with headers in any order:
-                  <code> tier</code>, <code> pos/position</code>, <code> team</code>, <code> name</code>.
+                  Paste free text (<code>Tier, POS, Team, Name</code>) or upload
+                  CSV with headers in any order:
+                  <code> tier</code>, <code> pos/position</code>,{" "}
+                  <code> team</code>, <code> name</code>.
                 </p>
                 <textarea
                   rows={8}
                   className={`w-full rounded-lg border px-2 py-1.5 text-sm ${
                     dark ? "bg-zinc-800 border-zinc-600" : ""
                   }`}
-                  placeholder={`Examples:\n1, WR1, LAR, Puka Nacua\n1, RB1, NYJ, Breece Hall\n2, TE1, DET, Sam LaPorta`}
+                  placeholder={`Examples:\n1, WR, LAR, Puka Nacua\n1, RB, NYJ, Breece Hall\n2, TE, DET, Sam LaPorta`}
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                 />
                 <div className="mt-2 flex gap-2">
-                  <Button className="bg-orange-300 text-black" onClick={importFromText}>
+                  <Button
+                    className="bg-orange-300 text-black"
+                    onClick={importFromText}
+                  >
                     Import from Text
                   </Button>
-                  <Button className="bg-orange-300 text-black" onClick={openFile}>
+                  <Button
+                    className="bg-orange-300 text-black"
+                    onClick={openFile}
+                  >
                     Choose CSV…
                   </Button>
                   <input
@@ -965,9 +1041,10 @@ export default function App() {
               <div>
                 <div className="font-semibold text-sm mb-1">ADP (merge)</div>
                 <p className="text-xs opacity-70 mb-2">
-                  Upload a CSV with columns <code>name</code> (or <code>player</code>),{" "}
-                  <code>adp</code>, and <code>source</code> (values like{" "}
-                  <em>yahoo</em> or <em>fantasypros</em>). This won’t change your player list.
+                  Upload a CSV with columns <code>name</code> (or{" "}
+                  <code>player</code>), <code>adp</code>, and{" "}
+                  <code>source</code> (values like <em>yahoo</em> or{" "}
+                  <em>fantasypros</em>). This won’t change your player list.
                 </p>
                 <div className="mt-2 flex gap-2">
                   <Button className="bg-orange-300 text-black" onClick={openAdp}>
@@ -1003,6 +1080,7 @@ export default function App() {
         >
           <div className="flex items-center justify-between gap-2 p-1.5">
             <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-300" />
               <span className="w-5 text-[10px] opacity-70 tabular-nums"></span>
               <span
                 className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${tierClass(
@@ -1017,7 +1095,9 @@ export default function App() {
               <span className="font-semibold text-[12px]">
                 {draggingPlayer.name}
               </span>
-              <span className="text-[11px] opacity-70">{draggingPlayer.team || ""}</span>
+              <span className="text-[11px] opacity-70">
+                {draggingPlayer.team || ""}
+              </span>
             </div>
           </div>
         </div>
