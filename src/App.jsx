@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 /* =======================
    Storage / schema
 ======================= */
-const STORAGE_KEY = "fantasy-draft-board-v8";
+const STORAGE_KEY = "fantasy-draft-board-v9";
 const DARK_KEY = "fdb_dark";
 
 const DEFAULT_SETTINGS = {
@@ -28,7 +28,7 @@ const STARTERS = [
 
 const POS_LIST = ["ALL", "RB", "WR", "QB", "TE", "K", "DST"];
 
-/* Pastel board colors by position (used on tabs & board) */
+/* Pastel board colors by position (used on tabs, bubbles & draft board) */
 const POS_BG = (pos) => {
   const p = (pos || "").toUpperCase();
   if (p === "WR") return "bg-blue-300 text-black";
@@ -38,7 +38,6 @@ const POS_BG = (pos) => {
   if (p === "DST" || p === "DEF") return "bg-gray-300 text-black";
   return "bg-gray-300 text-black";
 };
-/* Small dot for overall list rows to match position color */
 const POS_DOT = (pos) => {
   const p = (pos || "").toUpperCase();
   if (p === "WR") return "bg-blue-300";
@@ -48,17 +47,6 @@ const POS_DOT = (pos) => {
   if (p === "DST" || p === "DEF") return "bg-gray-300";
   return "bg-gray-300";
 };
-
-/* Pastel tier colors — distinct from POS; loop after 5 */
-const TIER_CLASSES = [
-  "bg-emerald-200 text-emerald-900",
-  "bg-sky-200 text-sky-900",
-  "bg-amber-200 text-amber-900",
-  "bg-orange-200 text-orange-900",
-  "bg-rose-200 text-rose-900",
-];
-const tierClass = (tier = 1) =>
-  TIER_CLASSES[(Math.max(1, tier) - 1) % TIER_CLASSES.length];
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -71,7 +59,7 @@ const norm = (s) =>
     .trim();
 
 function parseImportLine(line) {
-  // Accept: "Tier, POS, Team, Name" (no POS# required)
+  // Accept: "Tier, POS, Team, Name" (we ignore tier visually)
   const parts = line.split(/[,\|\t]/).map((s) => s.trim()).filter(Boolean);
   if (parts.length >= 4 && /^\d+$/.test(parts[0])) {
     const tier = Math.max(1, parseInt(parts[0], 10) || 1);
@@ -82,13 +70,11 @@ function parseImportLine(line) {
     const name = parts.slice(3).join(" ");
     return { tier, pos, team, name };
   }
-  // fallback: "Name POS TEAM T#"
+  // fallback: "Name POS TEAM"
   let name = line.trim(),
     pos = "",
     team = "",
     tier = 1;
-  const t = line.match(/T(\d+)/i);
-  if (t) tier = parseInt(t[1], 10) || 1;
   const pt = line.match(/(.+?)\s+(QB|RB|WR|TE|K|DST)\s+([A-Z]{2,3})/i);
   if (pt) {
     name = pt[1].trim();
@@ -104,19 +90,32 @@ function loadState() {
     if (!raw) throw new Error("no saved state");
     const obj = JSON.parse(raw);
     if (Array.isArray(obj))
-      return { players: obj, history: [], settings: DEFAULT_SETTINGS, adp: {} };
+      return {
+        players: obj,
+        history: [],
+        settings: DEFAULT_SETTINGS,
+        adp: {},
+        stats: {},
+      };
     return {
       players: obj.players || [],
       history: obj.history || [],
       settings: { ...DEFAULT_SETTINGS, ...(obj.settings || {}) },
       adp: obj.adp || {},
+      stats: obj.stats || {}, // { normName: { "2024": {...}, "2023": {...}, ... } }
     };
   } catch {
     const players = STARTERS.map((line, i) => {
       const { tier, pos, team, name } = parseImportLine(line);
       return { id: uid(), name, pos, team, tier, drafted: false, rank: i };
     });
-    return { players, history: [], settings: DEFAULT_SETTINGS, adp: {} };
+    return {
+      players,
+      history: [],
+      settings: DEFAULT_SETTINGS,
+      adp: {},
+      stats: {},
+    };
   }
 }
 
@@ -147,7 +146,7 @@ const IconToggle = ({ on, onClick }) => (
 const Input = ({ className = "", ...p }) => (
   <input
     {...p}
-    className={`px-2.5 py-1.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring w-full ${className}`}
+    className={`px-2.5 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring w-full ${className}`}
   />
 );
 
@@ -160,6 +159,7 @@ export default function App() {
   const [history, setHistory] = useState(initial.history);
   const [settings, setSettings] = useState(initial.settings);
   const [adp, setAdp] = useState(initial.adp);
+  const [stats, setStats] = useState(initial.stats); // multi-year stats
 
   const [editMode, setEditMode] = useState(false);
   const [editNames, setEditNames] = useState(false);
@@ -170,8 +170,9 @@ export default function App() {
   const [importText, setImportText] = useState("");
   const fileInputRef = useRef(null);
   const adpFileRef = useRef(null);
+  const statsFileRef = useRef(null);
 
-  // manual drag state (one-click drag)
+  // manual drag state
   const itemRefs = useRef(new Map()); // id -> element
   const rectsRef = useRef([]); // {id, idx, mid}
   const [drag, setDrag] = useState(null); // {id, fromFiltered, x, y, offX, offY, w}
@@ -200,10 +201,10 @@ export default function App() {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ players, history, settings, adp })
+        JSON.stringify({ players, history, settings, adp, stats })
       );
     } catch {}
-  }, [players, history, settings, adp]);
+  }, [players, history, settings, adp, stats]);
 
   /* ------- Derived lists ------- */
   const byRank = useMemo(
@@ -212,7 +213,7 @@ export default function App() {
   );
   const available = useMemo(() => byRank.filter((p) => !p.drafted), [byRank]);
 
-  // Dynamic position numbering (RB1/RB2/etc.) based on current available order
+  // Dynamic position numbering (RB1/WR1/etc.) based on current available order
   const posRankMap = useMemo(() => {
     const counts = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DST: 0 },
       map = {};
@@ -226,12 +227,28 @@ export default function App() {
     return map;
   }, [available]);
 
+  // Filter + live-sort while typing
   const filteredAvailable = useMemo(() => {
-    return available.filter((p) => {
+    const base = available.filter((p) => {
       if (posTab !== "ALL" && (p.pos || "") !== posTab) return false;
       if (!search.trim()) return true;
       const hay = `${p.name} ${p.pos || ""} ${p.team || ""}`.toLowerCase();
       return hay.includes(search.toLowerCase());
+    });
+
+    if (!search.trim()) return base; // keep rank order when no search
+
+    const q = search.trim().toLowerCase();
+    return [...base].sort((a, b) => {
+      const an = a.name.toLowerCase(),
+        bn = b.name.toLowerCase();
+      const aStarts = an.startsWith(q),
+        bStarts = bn.startsWith(q);
+      if (aStarts !== bStarts) return aStarts ? -1 : 1;
+      const aHas = an.includes(q),
+        bHas = bn.includes(q);
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      return an.localeCompare(bn);
     });
   }, [available, posTab, search]);
 
@@ -249,23 +266,8 @@ export default function App() {
         const wasDrafted = byRank[i].drafted;
         merged.push(wasDrafted ? byRank[i] : orderedAvail[u++]);
       }
-
-      // Auto-tier to neighbor(s)
-      const newIndex = merged.findIndex((x) => x.id === moved.id);
-      const left = merged[newIndex - 1];
-      const right = merged[newIndex + 1];
-      const lt = left ? (byId[left.id].tier || 1) : null;
-      const rt = right ? (byId[right.id].tier || 1) : null;
-      let newTier = byId[moved.id].tier || 1;
-      if (lt != null && rt != null) newTier = Math.min(lt, rt);
-      else if (lt != null) newTier = lt;
-      else if (rt != null) newTier = rt;
-
-      return merged.map((p, i) => {
-        const base = { ...byId[p.id], rank: i };
-        if (p.id === moved.id) base.tier = newTier;
-        return base;
-      });
+      // (Tiers removed from UI; we keep rank only)
+      return merged.map((p, i) => ({ ...byId[p.id], rank: i }));
     });
   }
 
@@ -364,9 +366,10 @@ export default function App() {
     window.removeEventListener("pointermove", onPointerMove);
   }
 
-  /* ------- Import (players + ADP) ------- */
+  /* ------- Import (players + ADP + stats) ------- */
   const openFile = () => fileInputRef.current?.click();
   const openAdp = () => adpFileRef.current?.click();
+  const openStats = () => statsFileRef.current?.click();
 
   function parseCSV(text) {
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
@@ -374,7 +377,7 @@ export default function App() {
     const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
     const getIdx = (...names) =>
       names.map((n) => headers.indexOf(n)).find((i) => i >= 0) ?? -1;
-    const idxTier = getIdx("tier");
+    const idxTier = getIdx("tier"); // ignored in UI
     const idxPos = getIdx("pos", "position");
     const idxTeam = getIdx("team");
     const idxName = getIdx("name", "player", "player name");
@@ -416,6 +419,55 @@ export default function App() {
       if (source.includes("yahoo")) out[k].yahoo = val;
       if (source.includes("fantasypros") || source.includes("fp"))
         out[k].fantasypros = val;
+    }
+    return out;
+  }
+
+  function parseStatsCSV(text) {
+    // Flexible headers; store by normalized name + season (YYYY)
+    const H = (s) => s.replace(/\s+/g, "").toLowerCase();
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
+    if (!lines.length) return {};
+    const headers = lines[0].split(",").map((h) => H(h));
+    const idx = (names) =>
+      names.map((n) => headers.indexOf(H(n))).find((i) => i >= 0) ?? -1;
+
+    const idxName = idx(["name", "player", "playername"]);
+    const idxYear = idx(["year", "season"]);
+    const idxTargets = idx(["targets", "tgt"]);
+    const idxRec = idx(["receptions", "rec"]);
+    const idxRecYds = idx(["recyds", "receivingyards", "rec_yards"]);
+    const idxRecTd = idx(["rectd", "receivingtd", "receivingtds", "rec_tds"]);
+    const idxRushAtt = idx(["rushatt", "rushingattempts", "rush_attempts"]);
+    const idxRushYds = idx(["rushyds", "rushingyards", "rush_yards"]);
+    const idxRushTd = idx(["rushtd", "rushingtd", "rushingtds", "rush_tds"]);
+    const idxPassAtt = idx(["passatt", "attempts", "passingattempts"]);
+    const idxPassYds = idx(["passyds", "passingyards", "pass_yards"]);
+    const idxPassTd = idx(["passtd", "passingtd", "passingtds", "pass_tds"]);
+
+    const out = {}; // { normName: { "2024": {...}, "2023": {...} } }
+
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(",").map((s) => s.trim());
+      const name = parts[idxName] || "";
+      const year = parts[idxYear] || "";
+      if (!name || !year) continue;
+      const k = norm(name);
+      const y = String(parseInt(year, 10));
+      const row = {
+        targets: idxTargets >= 0 ? +parts[idxTargets] || 0 : undefined,
+        receptions: idxRec >= 0 ? +parts[idxRec] || 0 : undefined,
+        rec_yds: idxRecYds >= 0 ? +parts[idxRecYds] || 0 : undefined,
+        rec_td: idxRecTd >= 0 ? +parts[idxRecTd] || 0 : undefined,
+        rush_att: idxRushAtt >= 0 ? +parts[idxRushAtt] || 0 : undefined,
+        rush_yds: idxRushYds >= 0 ? +parts[idxRushYds] || 0 : undefined,
+        rush_td: idxRushTd >= 0 ? +parts[idxRushTd] || 0 : undefined,
+        pass_att: idxPassAtt >= 0 ? +parts[idxPassAtt] || 0 : undefined,
+        pass_yds: idxPassYds >= 0 ? +parts[idxPassYds] || 0 : undefined,
+        pass_td: idxPassTd >= 0 ? +parts[idxPassTd] || 0 : undefined,
+      };
+      out[k] = out[k] || {};
+      out[k][y] = row;
     }
     return out;
   }
@@ -475,7 +527,28 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  /* ------- Sleeper (for details) ------- */
+  const onStatsChosen = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || "");
+      const map = parseStatsCSV(text);
+      if (!Object.keys(map).length) return;
+      setStats((cur) => {
+        const out = { ...cur };
+        for (const k of Object.keys(map)) {
+          out[k] = { ...(out[k] || {}), ...map[k] };
+        }
+        return out;
+      });
+      alert("Stats imported.");
+      statsFileRef.current && (statsFileRef.current.value = "");
+    };
+    reader.readAsText(file);
+  };
+
+  /* ------- Sleeper (for details basics) ------- */
   useEffect(() => {
     if (!selectedId || sleeperMap) return;
     (async () => {
@@ -498,27 +571,19 @@ export default function App() {
     if (!sleeperMap || !selected) return null;
     const k = norm(selected.name);
     return sleeperMap[k] || null;
+    // eslint-disable-next-line
   }, [sleeperMap, selected]);
   const selectedADP = useMemo(() => {
     if (!selected) return {};
     return adp[norm(selected.name)] || {};
   }, [adp, selected]);
+
   const headshotUrl = selectedSleeper
     ? `https://sleepercdn.com/content/nfl/players/thumb/${selectedSleeper.id}.jpg`
     : null;
 
   /* ------- Rendering helpers ------- */
-  const TierPill = ({ tier }) => (
-    <span
-      className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${tierClass(
-        tier
-      )}`}
-    >
-      Tier {tier || 1}
-    </span>
-  );
-
-  // Player row (name opens details only when not editing; Draft button hidden in edit mode)
+  // Player row (no tiers; POS bubble color-coded; Draft button only when not editing)
   const PlayerRow = ({ p, overallIndex, posIndex }) => {
     const beingDragged = drag?.id === p.id;
     return (
@@ -547,8 +612,9 @@ export default function App() {
           <span className="w-5 text-[10px] opacity-70 tabular-nums">
             {overallIndex + 1}
           </span>
-          <TierPill tier={p.tier || 1} />
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-black">
+
+          {/* POS bubble colored */}
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${POS_BG(p.pos)}`}>
             {p.pos ? `${p.pos}${posIndex ?? ""}` : "POS"}
           </span>
 
@@ -655,13 +721,13 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-2" />
         </div>
 
-        {/* 30% / 70% layout (3 / 7) */}
+        {/* 20% / 80% layout (2 / 8) */}
         <div className="grid grid-cols-1 md:grid-cols-10 gap-3">
-          {/* Overall Rankings (30%) */}
+          {/* Overall Rankings (20%) */}
           <section
             className={`${
               dark ? "bg-zinc-700" : "bg-white"
-            } rounded-2xl shadow p-3 md:col-span-3`}
+            } rounded-2xl shadow p-3 md:col-span-2`}
           >
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-bold">Overall Rankings</h2>
@@ -709,11 +775,18 @@ export default function App() {
                 );
               })}
             </div>
+
+            {/* Search: black text, no autocorrect/fill, no spellcheck */}
             <div className="mb-2">
               <Input
                 placeholder="Search by name / team"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                className="bg-white text-black"
               />
             </div>
 
@@ -725,11 +798,11 @@ export default function App() {
             </ul>
           </section>
 
-          {/* Draft Board + Details (70%) */}
+          {/* Draft Board + Details (80%) */}
           <section
             className={`${
               dark ? "bg-zinc-700" : "bg-white"
-            } rounded-2xl shadow p-3 md:col-span-7`}
+            } rounded-2xl shadow p-3 md:col-span-8`}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -759,7 +832,7 @@ export default function App() {
 
             {/* One horizontal scroll container that wraps header + rows */}
             <div className="overflow-x-auto overflow-y-visible">
-              {/* Team header */}
+              {/* Team header (black names in light mode) */}
               <div
                 className="grid gap-2 mb-2"
                 style={{
@@ -856,8 +929,8 @@ export default function App() {
                 <div className="text-sm opacity-70">No player selected.</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-10 gap-3">
-                  {/* Photo + basics */}
-                  <div className="md:col-span-3 flex gap-3 items-start">
+                  {/* Photo + basics (slightly larger text, include height) */}
+                  <div className="md:col-span-4 flex gap-3 items-start">
                     <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-200 shrink-0">
                       {headshotUrl ? (
                         <img
@@ -877,92 +950,40 @@ export default function App() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold truncate">{selected.name}</div>
-                      <div className="text-xs opacity-80">
+                      <div className="font-bold text-[14px] truncate">{selected.name}</div>
+                      <div className="text-[13px] opacity-80">
                         {selected.pos || "POS"} • {selected.team || "TEAM"}
                       </div>
-                      <div className="mt-1 text-xs flex gap-2 items-center">
-                        <span
-                          className={`px-1.5 py-0.5 rounded-full ${tierClass(
-                            selected.tier || 1
-                          )}`}
-                        >
-                          Tier {selected.tier || 1}
-                        </span>
+                      <div className="mt-2 text-[13px]">
+                        <div>Height: {selectedSleeper?.data?.height ?? "—"}</div>
+                        <div>Weight: {selectedSleeper?.data?.weight ?? "—"}</div>
+                        <div>Age: {selectedSleeper?.data?.age ?? "—"}</div>
+                        <div>College: {selectedSleeper?.data?.college ?? "—"}</div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Stats */}
-                  <div className="md:col-span-3">
-                    <div className="font-semibold text-xs mb-1">Stats (basic)</div>
-                    {selectedSleeper ? (
-                      <ul className="text-xs space-y-0.5">
-                        <li>Age: {selectedSleeper.data.age ?? "—"}</li>
-                        <li>Height: {selectedSleeper.data.height ?? "—"}</li>
-                        <li>Weight: {selectedSleeper.data.weight ?? "—"}</li>
-                        <li>College: {selectedSleeper.data.college ?? "—"}</li>
-                      </ul>
-                    ) : (
-                      <div className="text-xs opacity-70">
-                        Stats unavailable (no match yet).
-                      </div>
-                    )}
-                  </div>
-
-                  {/* ADP */}
-                  <div className="md:col-span-2">
-                    <div className="font-semibold text-xs mb-1">ADP</div>
-                    <ul className="text-xs space-y-0.5">
-                      <li>Yahoo: {selectedADP.yahoo ?? "—"}</li>
-                      <li>FantasyPros: {selectedADP.fantasypros ?? "—"}</li>
-                    </ul>
+                  {/* Last 3 Seasons */}
+                  <div className="md:col-span-6">
+                    <div className="font-semibold text-xs mb-1">Last 3 Seasons</div>
+                    <SeasonStatsTable pos={(selected.pos || "").toUpperCase()} name={selected.name} stats={stats} />
                     <div className="mt-2">
-                      <Button
-                        className="bg-orange-300 text-black"
-                        onClick={openAdp}
-                      >
-                        Import ADP CSV
+                      <Button className="bg-orange-300 text-black" onClick={openStats}>
+                        Import Stats CSV
                       </Button>
                       <input
-                        ref={adpFileRef}
+                        ref={statsFileRef}
                         type="file"
                         accept=".csv,text/csv"
                         className="hidden"
-                        onChange={onADPChosen}
+                        onChange={onStatsChosen}
                       />
                     </div>
                   </div>
 
-                  {/* News links */}
-                  <div className="md:col-span-2">
-                    <div className="font-semibold text-xs mb-1">Recent News</div>
-                    <ul className="text-xs space-y-1">
-                      <li>
-                        <a
-                          className="underline"
-                          href={`https://news.google.com/search?q=${encodeURIComponent(
-                            selected.name + " NFL"
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Google News
-                        </a>
-                      </li>
-                      <li>
-                        <a
-                          className="underline"
-                          href={`https://www.fantasypros.com/search/?query=${encodeURIComponent(
-                            selected.name
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          FantasyPros News
-                        </a>
-                      </li>
-                    </ul>
+                  {/* ADP */}
+                  <div className="md:col-span-3 md:hidden">
+                    {/* (kept minimal on small screens) */}
                   </div>
                 </div>
               )}
@@ -1002,7 +1023,7 @@ export default function App() {
                 <p className="text-xs opacity-70 mb-2">
                   Paste free text (<code>Tier, POS, Team, Name</code>) or upload
                   CSV with headers in any order:
-                  <code> tier</code>, <code> pos/position</code>,{" "}
+                  <code> tier</code> (ignored in UI), <code> pos/position</code>,{" "}
                   <code> team</code>, <code> name</code>.
                 </p>
                 <textarea
@@ -1080,16 +1101,9 @@ export default function App() {
         >
           <div className="flex items-center justify-between gap-2 p-1.5">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-gray-300" />
+              <span className={`w-2 h-2 rounded-full ${POS_DOT(draggingPlayer.pos)}`} />
               <span className="w-5 text-[10px] opacity-70 tabular-nums"></span>
-              <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${tierClass(
-                  draggingPlayer.tier || 1
-                )}`}
-              >
-                Tier {draggingPlayer.tier || 1}
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-black">
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${POS_BG(draggingPlayer.pos)}`}>
                 {draggingPlayer.pos || "POS"}
               </span>
               <span className="font-semibold text-[12px]">
@@ -1104,4 +1118,83 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/* ========= Helper component: 3-season table ========= */
+function SeasonStatsTable({ pos, name, stats }) {
+  const key = norm(name);
+  const now = new Date().getFullYear();
+  // NFL season rolls; use last three completed seasons by default
+  const years = [String(now - 1), String(now - 2), String(now - 3)];
+
+  const rows = years.map((y) => ({ y, d: (stats[key] || {})[y] || {} }));
+
+  if (pos === "QB") {
+    return (
+      <div className="overflow-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left">
+              <th className="py-1 pr-2">Year</th>
+              <th className="py-1 pr-2">Att</th>
+              <th className="py-1 pr-2">Pass Yds</th>
+              <th className="py-1 pr-2">Pass TD</th>
+              <th className="py-1 pr-2">Rush Yds</th>
+              <th className="py-1 pr-2">Rush TD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ y, d }) => (
+              <tr key={y}>
+                <td className="py-1 pr-2">{y}</td>
+                <td className="py-1 pr-2">{num(d.pass_att)}</td>
+                <td className="py-1 pr-2">{num(d.pass_yds)}</td>
+                <td className="py-1 pr-2">{num(d.pass_td)}</td>
+                <td className="py-1 pr-2">{num(d.rush_yds)}</td>
+                <td className="py-1 pr-2">{num(d.rush_td)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // RB/WR/TE default
+  return (
+    <div className="overflow-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left">
+            <th className="py-1 pr-2">Year</th>
+            <th className="py-1 pr-2">Targets</th>
+            <th className="py-1 pr-2">Rec</th>
+            <th className="py-1 pr-2">Rec Yds</th>
+            <th className="py-1 pr-2">Rec TD</th>
+            <th className="py-1 pr-2">Rush Att</th>
+            <th className="py-1 pr-2">Rush Yds</th>
+            <th className="py-1 pr-2">Rush TD</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ y, d }) => (
+            <tr key={y}>
+              <td className="py-1 pr-2">{y}</td>
+              <td className="py-1 pr-2">{num(d.targets)}</td>
+              <td className="py-1 pr-2">{num(d.receptions)}</td>
+              <td className="py-1 pr-2">{num(d.rec_yds)}</td>
+              <td className="py-1 pr-2">{num(d.rec_td)}</td>
+              <td className="py-1 pr-2">{num(d.rush_att)}</td>
+              <td className="py-1 pr-2">{num(d.rush_yds)}</td>
+              <td className="py-1 pr-2">{num(d.rush_td)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function num(v) {
+  return v === undefined ? "—" : String(v);
 }
