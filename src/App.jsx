@@ -783,15 +783,30 @@ export default function App() {
 
             {/* My Team picker */}
             {editNames && (
-              <div className="flex items-center gap-2 mb-2">
-                <label className="text-xs opacity-80">Highlight my team:</label>
-                <select
-                  className={`px-2 py-1 border rounded text-xs ${dark ? "bg-zinc-800 border-zinc-600" : "bg-white"}`}
-                  value={settings.myTeam == null ? "" : String(settings.myTeam)}
-                  onChange={(e) => {
-                    const v = e.target.value === "" ? null : parseInt(e.target.value, 10);
-                    setSettings((s) => ({ ...s, myTeam: v }));
-                  }}
-                >
-                  <option value="">None</option>
-                  {Array.from({ length: settings.numTeams }, (_, i)
+  <div className="flex items-center gap-2 mb-2">
+    <label className="text-xs opacity-80">Highlight my team:</label>
+
+    <select
+      className={`px-2 py-1 border rounded text-xs ${
+        dark ? "bg-zinc-800 border-zinc-600" : "bg-white"
+      }`}
+      value={settings.myTeam == null ? "" : String(settings.myTeam)}
+      onChange={(e) => {
+        const v = e.target.value === "" ? null : parseInt(e.target.value, 10);
+        setSettings((s) => ({ ...s, myTeam: v }));
+      }}
+    >
+      <option value="">None</option>
+      {Array.from({ length: settings.numTeams }, (_, i) => (
+        <option key={i} value={i}>
+          {settings.teamNames[i] || `Team ${i + 1}`} ({i + 1})
+        </option>
+      ))}
+    </select>
+
+    <span className="text-[11px] opacity-70">
+      The chosen team column will have a yellow border.
+    </span>
+  </div>
+)}
+
