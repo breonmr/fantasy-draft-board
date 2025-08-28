@@ -53,7 +53,7 @@ const norm = (s) =>
    Import parsing helpers
 ===================================================== */
 function parseImportLine(line) {
-  // Accept: "Tier, POS, Team, Name"
+  // Accept: "Tier, POS, Team, Name[, Target]"
   const parts = line.split(/[,\|\t]/).map((s) => s.trim()).filter(Boolean);
   if (parts.length >= 4 && /^\d+$/.test(parts[0])) {
     const tier = Math.max(1, parseInt(parts[0], 10) || 1);
@@ -61,21 +61,25 @@ function parseImportLine(line) {
     const posMatch = posToken.match(/[A-Z]+/);
     const pos = posMatch ? posMatch[0] : "";
     const team = (parts[2] || "").toUpperCase();
-    const name = parts.slice(3).join(" ");
-    return { tier, pos, team, name };
+    const name = parts.slice(3, 4).join(" ") || parts[3];
+    // if there's a 5th column, treat as target
+    const target =
+      parts.length >= 5 ? Math.max(0, parseInt(parts[4], 10) || 0) : 0;
+    return { tier, pos, team, name, target };
   }
   // Fallback: "Name POS TEAM"
   let name = line.trim(),
     pos = "",
     team = "",
-    tier = 1;
+    tier = 1,
+    target = 0;
   const pt = line.match(/(.+?)\s+(QB|RB|WR|TE|K|DST)\s+([A-Z]{2,3})/i);
   if (pt) {
     name = pt[1].trim();
     pos = pt[2].toUpperCase();
     team = pt[3].toUpperCase();
   }
-  return { tier, pos, team, name };
+  return { tier, pos, team, name, target };
 }
 
 function parseCSV(text) {
@@ -88,6 +92,7 @@ function parseCSV(text) {
   const idxPos = getIdx("pos", "position");
   const idxTeam = getIdx("team");
   const idxName = getIdx("name", "player", "player name");
+  const idxTarget = getIdx("target");
   const out = [];
   for (let i = 1; i < lines.length; i++) {
     const parts = lines[i].split(",").map((s) => s.trim());
@@ -97,7 +102,9 @@ function parseCSV(text) {
     const pos = posMatch ? posMatch[0] : "";
     const team = idxTeam >= 0 ? (parts[idxTeam] || "").toUpperCase() : "";
     const name = idxName >= 0 ? parts[idxName] || "" : lines[i];
-    out.push({ tier, pos, team, name });
+    const target =
+      idxTarget >= 0 ? Math.max(0, parseInt(parts[idxTarget] || "0", 10) || 0) : 0;
+    out.push({ tier, pos, team, name, target });
   }
   return out;
 }
@@ -203,8 +210,17 @@ function loadState() {
     };
   } catch {
     const players = STARTERS.map((line, i) => {
-      const { tier, pos, team, name } = parseImportLine(line);
-      return { id: uid(), name, pos, team, tier, drafted: false, rank: i };
+      const { tier, pos, team, name, target } = parseImportLine(line);
+      return {
+        id: uid(),
+        name,
+        pos,
+        team,
+        tier,
+        target: target || 0,
+        drafted: false,
+        rank: i,
+      };
     });
     return {
       players,
@@ -473,8 +489,17 @@ export default function App() {
     const lines = importText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (!lines.length) return;
     const next = lines.map((line, i) => {
-      const { tier, pos, team, name } = parseImportLine(line);
-      return { id: uid(), name, pos, team, tier: tier || 1, drafted: false, rank: i };
+      const { tier, pos, team, name, target } = parseImportLine(line);
+      return {
+        id: uid(),
+        name,
+        pos,
+        team,
+        tier: tier || 1,
+        target: target || 0,
+        drafted: false,
+        rank: i,
+      };
     });
     setPlayers(next);
     setHistory([]);
@@ -497,6 +522,7 @@ export default function App() {
         pos: r.pos,
         team: r.team,
         tier: r.tier || 1,
+        target: r.target || 0,
         drafted: false,
         rank: i,
       }));
@@ -605,9 +631,17 @@ export default function App() {
           )}
         </div>
 
-        {/* Draft button only when not editing */}
+        {/* Target star + Draft button (only when not editing) */}
         {!editMode && (
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center gap-2">
+            {p.target > 0 && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-300 text-amber-900"
+                title={`Target ${p.target}`}
+              >
+                ★ {p.target}
+              </span>
+            )}
             <Button
               className="bg-blue-900 text-white"
               onClick={(e) => {
@@ -772,125 +806,114 @@ export default function App() {
               </div>
             </div>
 
-            {/* 'My team' picker */}
-            {editNames && (
-              <div className="flex items-center gap-2 mb-2">
-                <label className="text-xs opacity-80">Highlight my team:</label>
-                <select
-                  className={`px-2 py-1 border rounded text-xs ${
-                    dark ? "bg-zinc-800 border-zinc-600" : "bg-white"
-                  }`}
-                  value={settings.myTeam == null ? "" : String(settings.myTeam)}
-                  onChange={(e) => {
-                    const v =
-                      e.target.value === "" ? null : parseInt(e.target.value, 10);
-                    setSettings((s) => ({ ...s, myTeam: v }));
-                  }}
-                >
-                  <option value="">None</option>
-                  {Array.from({ length: settings.numTeams }, (_, i) => (
-                    <option key={i} value={i}>
-                      {settings.teamNames[i] || `Team ${i + 1}`} ({i + 1})
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[11px] opacity-70">
-                  The chosen team column will have a yellow border.
-                </span>
-              </div>
-            )}
-
-            {/* The board (single horizontal scroller) */}
+            {/* The board (single horizontal scroller) with continuous column highlight */}
             <div className="overflow-x-auto overflow-y-visible">
-              {/* Team header */}
-              <div
-                className="grid gap-2 mb-2"
-                style={{
-                  gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
-                }}
-              >
-                {Array.from({ length: settings.numTeams }, (_, c) => {
-                  const isMine = settings.myTeam === c;
-                  return (
-                    <div
-                      key={c}
-                      className={`relative ${
-                        dark
-                          ? "bg-zinc-600 border-zinc-600"
-                          : "bg-gray-200 border-gray-200"
-                      } border p-2 rounded-md ${isMine ? "ring-2 ring-yellow-400" : ""}`}
-                    >
-                      {editNames ? (
-                        <input
-                          className={`w-full px-2 py-1 rounded border text-sm ${
-                            dark ? "bg-zinc-700 border-zinc-500 text-white" : ""
-                          }`}
-                          value={settings.teamNames[c] || ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSettings((s) => {
-                              const t = [...s.teamNames];
-                              t[c] = val;
-                              return { ...s, teamNames: t };
-                            });
-                          }}
-                        />
-                      ) : (
-                        <span className={`font-semibold ${dark ? "text-zinc-200" : "text-black"}`}>
-                          {settings.teamNames[c]}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Round rows */}
-              {Array.from({ length: settings.numRounds }, (_, r) => (
+              <div className="relative">
+                {/* Team header */}
                 <div
-                  key={r}
                   className="grid gap-2 mb-2"
                   style={{
                     gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
                   }}
                 >
                   {Array.from({ length: settings.numTeams }, (_, c) => {
-                    const snakedIndex =
-                      r * settings.numTeams +
-                      (r % 2 === 0 ? c : settings.numTeams - 1 - c);
-                    const id = history[snakedIndex];
-                    const p = id ? players.find((x) => x.id === id) : null;
-                    const isMine = settings.myTeam === c;
-                    const pickNumber = snakedIndex + 1;
-
                     return (
                       <div
                         key={c}
                         className={`relative ${
                           dark
-                            ? "bg-zinc-800 border-zinc-600"
-                            : "bg-gray-50 border-gray-200"
-                        } border rounded-md p-2 min-h-[34px] ${isMine ? "ring-2 ring-yellow-400" : ""}`}
+                            ? "bg-zinc-600 border-zinc-600"
+                            : "bg-gray-200 border-gray-200"
+                        } border p-2 rounded-md`}
                       >
-                        {/* pick number (larger, no '#') */}
-                        <span className="absolute left-1 bottom-1 text-[11px] opacity-70">
-                          {pickNumber}
-                        </span>
-
-                        {p && (
-                          <div
-                            className={`px-2 py-1 rounded-md text-[12px] font-semibold ${POS_BG(
-                              p.pos
-                            )} truncate`}
-                          >
-                            {p.name}
-                          </div>
+                        {editNames ? (
+                          <input
+                            className={`w-full px-2 py-1 rounded border text-sm ${
+                              dark ? "bg-zinc-700 border-zinc-500 text-white" : ""
+                            }`}
+                            value={settings.teamNames[c] || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSettings((s) => {
+                                const t = [...s.teamNames];
+                                t[c] = val;
+                                return { ...s, teamNames: t };
+                              });
+                            }}
+                          />
+                        ) : (
+                          <span className={`font-semibold ${dark ? "text-zinc-200" : "text-black"}`}>
+                            {settings.teamNames[c]}
+                          </span>
                         )}
                       </div>
                     );
                   })}
                 </div>
-              ))}
+
+                {/* Round rows */}
+                {Array.from({ length: settings.numRounds }, (_, r) => (
+                  <div
+                    key={r}
+                    className="grid gap-2 mb-2"
+                    style={{
+                      gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
+                    }}
+                  >
+                    {Array.from({ length: settings.numTeams }, (_, c) => {
+                      const snakedIndex =
+                        r * settings.numTeams +
+                        (r % 2 === 0 ? c : settings.numTeams - 1 - c);
+                      const id = history[snakedIndex];
+                      const p = id ? players.find((x) => x.id === id) : null;
+                      const pickNumber = snakedIndex + 1;
+
+                      return (
+                        <div
+                          key={c}
+                          className={`relative ${
+                            dark
+                              ? "bg-zinc-800 border-zinc-600"
+                              : "bg-gray-50 border-gray-200"
+                          } border rounded-md p-2 min-h-[34px]`}
+                        >
+                          {/* pick number (larger, no '#') */}
+                          <span className="absolute left-1 bottom-1 text-[12px] opacity-70">
+                            {pickNumber}
+                          </span>
+
+                          {p && (
+                            <div
+                              className={`px-2 py-1 rounded-md text-[12px] font-semibold ${POS_BG(
+                                p.pos
+                              )} truncate`}
+                            >
+                              {p.name}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+
+                {/* Continuous highlight overlay for my team column */}
+                {settings.myTeam != null && (
+                  <div className="pointer-events-none absolute inset-0">
+                    <div
+                      className="h-full grid gap-2"
+                      style={{
+                        gridTemplateColumns: `repeat(${settings.numTeams}, minmax(140px, 1fr))`,
+                      }}
+                    >
+                      <div
+                        className="h-full rounded-md ring-4 ring-yellow-400"
+                        style={{ gridColumn: String(settings.myTeam + 1) }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <PlayerDetails
@@ -931,15 +954,15 @@ export default function App() {
               <div>
                 <div className="font-semibold text-sm mb-1">Players (replace list)</div>
                 <p className="text-xs opacity-70 mb-2">
-                  Paste free text (<code>Tier, POS, Team, Name</code>) or upload CSV with headers in any order:
-                  <code> tier</code> (ignored in UI), <code> pos/position</code>, <code> team</code>, <code> name</code>.
+                  Paste free text (<code>Tier, POS, Team, Name[, Target]</code>) or upload CSV with headers in any order:
+                  <code> tier</code> (ignored in UI), <code> pos/position</code>, <code> team</code>, <code> name</code>, <code> target</code>.
                 </p>
                 <textarea
                   rows={8}
                   className={`w-full rounded-lg border px-2 py-1.5 text-sm ${
                     dark ? "bg-zinc-800 border-zinc-600" : ""
                   }`}
-                  placeholder={`Examples:\n1, WR, LAR, Puka Nacua\n1, RB, NYJ, Breece Hall\n2, TE, DET, Sam LaPorta`}
+                  placeholder={`Examples:\n1, WR, LAR, Puka Nacua, 2\n1, RB, NYJ, Breece Hall, 3\n2, TE, DET, Sam LaPorta`}
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                 />
