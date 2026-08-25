@@ -22,10 +22,13 @@ function PlayerRow({
       className={`rounded-md border ${
         dark ? "border-zinc-600 bg-zinc-700" : "border-gray-300 bg-white"
       } flex items-center justify-between gap-2 p-1.5 ${
-        editMode ? "cursor-grab" : "cursor-default"
+        editMode ? "cursor-grab" : "cursor-pointer hover:border-blue-400 hover:shadow-sm"
       } select-none ${beingDragged ? "opacity-40" : ""}`}
       onPointerDown={onPointerDown}
-      title={editMode ? "Drag to reorder" : "Click Draft to draft; click name for details"}
+      onClick={() => {
+        if (!editMode) onSelect(player.id);
+      }}
+      title={editMode ? "Drag to reorder" : "Click card for details; click Draft to draft"}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <span className="w-6 text-[10px] opacity-70 tabular-nums">{(player.rank ?? 0) + 1}</span>
@@ -98,7 +101,9 @@ export function RankingsPanel({
   onSelect,
 }) {
   return (
-    <section className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-2xl shadow p-3 md:col-span-2`}>
+    <section
+      className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-2xl shadow p-3 flex flex-col min-h-0 md:sticky md:top-3 md:h-[calc(100vh-1.5rem)]`}
+    >
       <div className="flex items-center justify-between mb-2">
         <h2 className="font-bold">Overall Rankings</h2>
         <div className="flex items-center gap-2">
@@ -135,7 +140,7 @@ export function RankingsPanel({
         })}
       </div>
 
-      <div className="mb-2">
+      <div className="relative mb-2">
         <Input
           placeholder="Search by name / team"
           value={search}
@@ -144,11 +149,22 @@ export function RankingsPanel({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="bg-white text-black"
+          className="bg-white text-black pr-10"
         />
+        {search && (
+          <button
+            type="button"
+            className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg text-lg leading-none text-gray-500 hover:bg-gray-200 hover:text-gray-900"
+            onClick={() => onSearchChange("")}
+            aria-label="Clear search"
+            title="Clear search"
+          >
+            ×
+          </button>
+        )}
       </div>
 
-      <ul className="space-y-1.5 max-h-[80vh] overflow-auto pr-1">
+      <ul className="space-y-1.5 flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
         {players.map((player, index) => (
           <Fragment key={player.id}>
             {insertIndex === index && editMode && (

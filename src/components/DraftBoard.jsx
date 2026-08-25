@@ -20,11 +20,11 @@ export function DraftBoard({
   statsFileRef,
   adpFileRef,
 }) {
-  const columns = `repeat(${settings.numTeams}, minmax(140px, 1fr))`;
+  const columns = `repeat(${settings.numTeams}, minmax(0, 1fr))`;
 
   return (
-    <section className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-2xl shadow p-3 md:col-span-8`}>
-      <div className="flex items-center justify-between mb-2">
+    <section className={`${dark ? "bg-zinc-700" : "bg-white"} min-w-0 rounded-2xl shadow p-2`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
           <h2 className="font-bold">Draft Board</h2>
           <Button className="bg-orange-300 text-black" onClick={onReset}>
@@ -45,25 +45,25 @@ export function DraftBoard({
       </div>
 
       <div className="overflow-x-auto overflow-y-visible">
-        <div className="relative">
-          <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: columns }}>
+        <div className="relative min-w-[960px] xl:min-w-0">
+          <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: columns }}>
             {Array.from({ length: settings.numTeams }, (_, column) => (
               <div
                 key={column}
                 className={`relative ${
                   dark ? "bg-zinc-600 border-zinc-600" : "bg-gray-200 border-gray-200"
-                } border p-2 rounded-md`}
+                } border p-1.5 rounded-md min-w-0`}
               >
                 {editNames ? (
                   <input
-                    className={`w-full px-2 py-1 rounded border text-sm ${
+                    className={`w-full px-1.5 py-1 rounded border text-xs ${
                       dark ? "bg-zinc-700 border-zinc-500 text-white" : ""
                     }`}
                     value={settings.teamNames[column] || ""}
                     onChange={(event) => onTeamNameChange(column, event.target.value)}
                   />
                 ) : (
-                  <span className={`font-semibold ${dark ? "text-zinc-200" : "text-black"}`}>
+                  <span className={`block truncate text-xs font-semibold ${dark ? "text-zinc-200" : "text-black"}`}>
                     {settings.teamNames[column]}
                   </span>
                 )}
@@ -72,7 +72,7 @@ export function DraftBoard({
           </div>
 
           {Array.from({ length: settings.numRounds }, (_, round) => (
-            <div key={round} className="grid gap-2 mb-2" style={{ gridTemplateColumns: columns }}>
+            <div key={round} className="grid gap-1 mb-1" style={{ gridTemplateColumns: columns }}>
               {Array.from({ length: settings.numTeams }, (_, column) => {
                 const pickIndex =
                   round * settings.numTeams +
@@ -84,12 +84,12 @@ export function DraftBoard({
                     key={column}
                     className={`relative ${
                       dark ? "bg-zinc-800 border-zinc-600" : "bg-gray-50 border-gray-200"
-                    } border rounded-md p-2 min-h-[34px]`}
+                    } border rounded-md p-1 min-h-[30px]`}
                   >
-                    <span className="absolute left-1 bottom-1 text-[12px] opacity-70">{pickIndex + 1}</span>
+                    <span className="absolute left-1 bottom-0.5 text-[10px] opacity-70">{pickIndex + 1}</span>
                     {player && (
                       <div
-                        className={`px-2 py-1 rounded-md text-[12px] font-semibold ${positionClass(
+                        className={`px-1.5 py-1 rounded-md text-[11px] font-semibold ${positionClass(
                           player.pos
                         )} truncate`}
                       >

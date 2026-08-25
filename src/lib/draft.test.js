@@ -28,4 +28,17 @@ describe("draft state transitions", () => {
     expect(reordered.map((player) => player.rank)).toEqual([0, 1, 2, 3]);
     expect(reordered.find((player) => player.id === "b").drafted).toBe(true);
   });
+
+  it("keeps the dragged player at the shown downward insertion position", () => {
+    // Moving A before D removes it before insertion, so the underlying target index is 1.
+    const reordered = reorderAvailablePlayers(players, 0, 1);
+
+    expect(reordered.map((player) => player.id)).toEqual(["c", "b", "a", "d"]);
+  });
+
+  it("moves a player to the end of the available rankings", () => {
+    const reordered = reorderAvailablePlayers(players, 0, 2);
+
+    expect(reordered.map((player) => player.id)).toEqual(["c", "b", "d", "a"]);
+  });
 });

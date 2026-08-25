@@ -31,6 +31,10 @@ export default function App() {
   const statsFileRef = useRef(null);
   const itemRefs = useRef(new Map());
   const rectsRef = useRef([]);
+  const availableRef = useRef([]);
+  const filteredAvailableRef = useRef([]);
+  const dragRef = useRef(null);
+  const insertIndexRef = useRef(null);
   const [drag, setDrag] = useState(null);
   const [insertIndex, setInsertIndex] = useState(null);
 
@@ -48,6 +52,8 @@ export default function App() {
     () => filterAvailablePlayers(players, posTab, search),
     [players, posTab, search]
   );
+  availableRef.current = available;
+  filteredAvailableRef.current = filteredAvailable;
   const selectedPlayer = players.find((player) => player.id === selectedId) || null;
   const draggingPlayer = drag ? players.find((player) => player.id === drag.id) : null;
 
@@ -63,18 +69,28 @@ export default function App() {
       if (lastId) setPlayers((currentPlayers) => setPlayerDrafted(currentPlayers, lastId, false));
       return nextHistory;
     });
-    setInsertIndex(null);
+    setInsertionIndex(null);
   }
 
   function resetDraft() {
     if (!confirm("Reset the entire draft?")) return;
     setPlayers((current) => resetPlayers(current));
     setHistory([]);
-    setInsertIndex(null);
+    setInsertionIndex(null);
+  }
+
+  function setInsertionIndex(nextIndex) {
+    insertIndexRef.current = nextIndex;
+    setInsertIndex(nextIndex);
+  }
+
+  function setDragState(nextDrag) {
+    dragRef.current = nextDrag;
+    setDrag(nextDrag);
   }
 
   function measureRects() {
-    rectsRef.current = filteredAvailable.flatMap((player, index) => {
+    rectsRef.current = filteredAvailableRef.current.flatMap((player, index) => {
       const element = itemRefs.current.get(player.id);
       if (!element) return [];
       const rect = element.getBoundingClientRect();
@@ -89,7 +105,7 @@ export default function App() {
     const rect = element.getBoundingClientRect();
     measureRects();
 
-    setDrag({
+    const nextDrag = {
       id,
       fromFiltered,
       x: event.clientX,
@@ -97,40 +113,41 @@ export default function App() {
       offX: event.clientX - rect.left,
       offY: event.clientY - rect.top,
       w: rect.width,
-    });
-    setInsertIndex(fromFiltered);
+    };
+    setDragState(nextDrag);
+    setInsertionIndex(fromFiltered);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp, { once: true });
     document.body.classList.add("select-none");
   }
 
   function onPointerMove(event) {
-    setDrag((current) => {
-      if (!current) return current;
-      measureRects();
-      let nextIndex = rectsRef.current.findIndex((item) => event.clientY < item.mid);
-      if (nextIndex === -1) nextIndex = rectsRef.current.length;
-      setInsertIndex(nextIndex);
-      return { ...current, x: event.clientX, y: event.clientY };
-    });
+    const currentDrag = dragRef.current;
+    if (!currentDrag) return;
+    measureRects();
+    let nextIndex = rectsRef.current.findIndex((item) => event.clientY < item.mid);
+    if (nextIndex === -1) nextIndex = rectsRef.current.length;
+    setInsertionIndex(nextIndex);
+    setDragState({ ...currentDrag, x: event.clientX, y: event.clientY });
   }
 
   function onPointerUp() {
-    const currentDrag = drag;
-    setDrag(null);
+    const currentDrag = dragRef.current;
+    const targetIndex = insertIndexRef.current ?? currentDrag?.fromFiltered;
+    const currentFiltered = filteredAvailableRef.current;
+    const currentAvailable = availableRef.current;
+    setDragState(null);
+    setInsertionIndex(null);
     document.body.classList.remove("select-none");
     window.removeEventListener("pointermove", onPointerMove);
 
     if (!currentDrag) return;
-    const targetIndex = insertIndex ?? currentDrag.fromFiltered;
-    setInsertIndex(null);
-
-    const fromId = filteredAvailable[currentDrag.fromFiltered]?.id;
-    const targetId = targetIndex >= filteredAvailable.length ? null : filteredAvailable[targetIndex]?.id;
-    const fromAvailableIndex = available.findIndex((player) => player.id === fromId);
+    const fromId = currentFiltered[currentDrag.fromFiltered]?.id;
+    const targetId = targetIndex >= currentFiltered.length ? null : currentFiltered[targetIndex]?.id;
+    const fromAvailableIndex = currentAvailable.findIndex((player) => player.id === fromId);
     let toAvailableIndex = targetId === null
-      ? available.length
-      : available.findIndex((player) => player.id === targetId);
+      ? currentAvailable.length
+      : currentAvailable.findIndex((player) => player.id === targetId);
 
     if (fromAvailableIndex < toAvailableIndex) toAvailableIndex -= 1;
     if (fromAvailableIndex >= 0 && toAvailableIndex >= 0) {
@@ -215,7 +232,7 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-2" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-10 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-3 items-start">
           <RankingsPanel
             dark={dark}
             editMode={editMode}
