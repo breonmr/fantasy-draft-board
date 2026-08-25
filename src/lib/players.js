@@ -34,7 +34,8 @@ export function positionRankMap(players) {
   const map = {};
 
   for (const player of players) {
-    const position = player.pos || "NA";
+    const rawPosition = (player.pos || "NA").toUpperCase();
+    const position = rawPosition === "DEF" ? "DST" : rawPosition;
     if (counts[position] !== undefined) {
       counts[position]++;
       map[player.id] = counts[position];
@@ -44,16 +45,28 @@ export function positionRankMap(players) {
   return map;
 }
 
+export function matchesPositionFilter(player, position) {
+  const playerPosition = (player.pos || "").toUpperCase();
+  return (
+    position === "ALL" ||
+    playerPosition === position ||
+    (position === "FLEX" && ["RB", "WR", "TE"].includes(playerPosition)) ||
+    (["DEF", "DST"].includes(position) && ["DST", "DEF"].includes(playerPosition))
+  );
+}
+
+export function positionFilterCount(players, position) {
+  const matchingPlayers = players.filter((player) => matchesPositionFilter(player, position));
+  return {
+    drafted: matchingPlayers.filter((player) => player.drafted).length,
+    total: matchingPlayers.length,
+  };
+}
+
 export function filterAvailablePlayers(players, position, search) {
   const available = availablePlayers(players);
   const filtered = available.filter((player) => {
-    const playerPosition = (player.pos || "").toUpperCase();
-    const matchesPosition =
-      position === "ALL" ||
-      playerPosition === position ||
-      (position === "FLEX" && ["RB", "WR", "TE"].includes(playerPosition)) ||
-      (position === "DST" && playerPosition === "DEF");
-    if (!matchesPosition) return false;
+    if (!matchesPositionFilter(player, position)) return false;
     if (!search.trim()) return true;
     const haystack = `${player.name} ${player.pos || ""} ${player.team || ""}`.toLowerCase();
     return haystack.includes(search.toLowerCase());

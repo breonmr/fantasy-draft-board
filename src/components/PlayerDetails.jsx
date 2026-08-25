@@ -71,22 +71,19 @@ function recentStatsSummary(position, row) {
     : [["Rec", data.receptions], ["Yds", data.rec_yds], ["TD", data.rec_td]];
   const available = stats.filter(([, value]) => value !== undefined && value !== null && value !== "");
 
-  return available.length
-    ? `${year}: ${available.map(([label, value]) => `${value} ${label}`).join(" · ")}`
-    : "Recent stats have not been imported.";
+  return available.length ? `${year}: ${available.map(([label, value]) => `${value} ${label}`).join(" · ")}` : null;
 }
 
-function AdpSummary({ selectedAdp }) {
+function AdpSummary({ selectedAdp, showEmpty = false }) {
+  const hasYahoo = selectedAdp.yahoo !== undefined && selectedAdp.yahoo !== null && selectedAdp.yahoo !== "";
+  const hasFantasyPros = selectedAdp.fantasypros !== undefined && selectedAdp.fantasypros !== null && selectedAdp.fantasypros !== "";
+  if (!hasYahoo && !hasFantasyPros && !showEmpty) return null;
+
   return (
     <dl className="flex items-center gap-2 text-[10px] whitespace-nowrap">
-      <div>
-        <dt className="inline opacity-60">Yahoo </dt>
-        <dd className="inline font-semibold">{selectedAdp.yahoo ?? "—"}</dd>
-      </div>
-      <div>
-        <dt className="inline opacity-60">FP </dt>
-        <dd className="inline font-semibold">{selectedAdp.fantasypros ?? "—"}</dd>
-      </div>
+      {hasYahoo && <div><dt className="inline opacity-60">Yahoo </dt><dd className="inline font-semibold">{selectedAdp.yahoo}</dd></div>}
+      {hasFantasyPros && <div><dt className="inline opacity-60">FP </dt><dd className="inline font-semibold">{selectedAdp.fantasypros}</dd></div>}
+      {!hasYahoo && !hasFantasyPros && <div className="opacity-60">ADP —</div>}
     </dl>
   );
 }
@@ -160,7 +157,7 @@ function ExpandedDetails({ dark, selected, selectedAdp, rows, display, openAdp, 
 
           <aside className={`${dark ? "bg-zinc-700" : "bg-white"} flex min-h-0 flex-col rounded-lg p-2`}>
             <div className="text-[10px] font-medium uppercase tracking-wide opacity-60">Draft context</div>
-            <div className="mt-1"><AdpSummary selectedAdp={selectedAdp} /></div>
+            <div className="mt-1"><AdpSummary selectedAdp={selectedAdp} showEmpty /></div>
             <div className="mt-3 text-[10px] font-medium uppercase tracking-wide opacity-60">Recent news</div>
             <div className="mt-1 max-h-52 overflow-y-auto overscroll-contain text-[11px] opacity-70">
               No news data is loaded yet. When connected, recent headlines will scroll here without expanding the page.
@@ -172,7 +169,7 @@ function ExpandedDetails({ dark, selected, selectedAdp, rows, display, openAdp, 
   );
 }
 
-export function PlayerDetails({ dark, selected, adp, stats, openAdp, openStats, statsFileRef, adpFileRef }) {
+export function PlayerDetails({ dark, selected, positionRank, adp, stats, openAdp, openStats, statsFileRef, adpFileRef }) {
   const [expanded, setExpanded] = useState(false);
   const playerKey = selected ? normalizePlayerName(selected.name) : null;
   const selectedAdp = playerKey ? adp[playerKey] || {} : {};
@@ -181,6 +178,8 @@ export function PlayerDetails({ dark, selected, adp, stats, openAdp, openStats, 
   const rows = years.map((year) => ({ year, data: playerKey && stats[playerKey]?.[year] || {} }));
   const display = (value) => (value === undefined ? "—" : String(value));
   const latestSummary = selected ? recentStatsSummary((selected.pos || "").toUpperCase(), rows[0]) : null;
+  const latestNewsItem = Array.isArray(selected?.news) ? selected.news[0] : null;
+  const latestHeadline = typeof latestNewsItem === "string" ? latestNewsItem : latestNewsItem?.headline;
 
   return (
     <section className={`${dark ? "bg-zinc-800" : "bg-gray-50"} rounded-xl p-1.5 mt-1.5 w-full`}>
@@ -200,13 +199,15 @@ export function PlayerDetails({ dark, selected, adp, stats, openAdp, openStats, 
       {!selected ? (
         <div className="mt-1 text-[11px] opacity-70">Select an available player to view draft details.</div>
       ) : (
-        <div className={`mt-1 grid gap-1.5 ${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-1.5 lg:grid-cols-[minmax(180px,1fr)_auto_minmax(220px,1.2fr)] lg:items-center`}>
-          <PlayerIdentity selected={selected} compact />
-          <AdpSummary selectedAdp={selectedAdp} />
-          <div className="min-w-0 truncate text-[10px] leading-tight opacity-70">
-            <span className="font-medium opacity-100">Stats </span>{latestSummary}
-            <span className="mx-1 opacity-40">|</span>
-            <span className="font-medium opacity-100">News </span>No news data loaded.
+        <div className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 ${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-1.5`}>
+          <div className="min-w-[180px] flex-1"><PlayerIdentity selected={selected} compact /></div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] opacity-70">
+            <span>Overall #{(selected.rank ?? 0) + 1}</span>
+            <span>{selected.pos || "POS"}{positionRank ?? "—"}</span>
+            <span className={selected.starred ? "text-amber-500 opacity-100" : ""}>{selected.starred ? "★ Starred" : "☆ Not starred"}</span>
+            <AdpSummary selectedAdp={selectedAdp} />
+            {latestSummary && <span>Stats {latestSummary}</span>}
+            {latestHeadline && <span className="max-w-48 truncate">News {latestHeadline}</span>}
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterAvailablePlayers, togglePlayerStar } from "./players.js";
+import { filterAvailablePlayers, positionFilterCount, togglePlayerStar } from "./players.js";
 
 const players = [
   { id: "qb", name: "Quarterback", pos: "QB", drafted: false, rank: 0 },
@@ -14,8 +14,15 @@ describe("available-player helpers", () => {
     expect(filterAvailablePlayers(players, "FLEX", "").map((player) => player.id)).toEqual(["rb", "wr", "te"]);
   });
 
-  it("accepts DEF data under the DST/DEF filter", () => {
-    expect(filterAvailablePlayers(players, "DST", "").map((player) => player.id)).toEqual(["dst"]);
+  it("accepts DEF data under the DEF filter", () => {
+    expect(filterAvailablePlayers(players, "DEF", "").map((player) => player.id)).toEqual(["dst"]);
+  });
+
+  it("reports drafted and total counts for a filter segment", () => {
+    const drafted = players.map((player) => (player.id === "rb" ? { ...player, drafted: true } : player));
+
+    expect(positionFilterCount(drafted, "ALL")).toEqual({ drafted: 1, total: 5 });
+    expect(positionFilterCount(drafted, "FLEX")).toEqual({ drafted: 1, total: 3 });
   });
 
   it("toggles a watchlist star without changing other players", () => {

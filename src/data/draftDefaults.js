@@ -30,7 +30,7 @@ export const POSITION_FILTERS = [
   { value: "TE", label: "TE" },
   { value: "FLEX", label: "FLEX" },
   { value: "K", label: "K" },
-  { value: "DST", label: "DST/DEF" },
+  { value: "DEF", label: "DEF" },
 ];
 
 export function positionClass(pos) {

@@ -25,6 +25,20 @@ describe("Fantasy Draft Board", () => {
     expect(screen.getByText("Ja'Marr Chase")).toBeInTheDocument();
   });
 
+  it("uses a single neutral segmented filter control with drafted counts", () => {
+    render(<App />);
+
+    const allFilter = screen.getByRole("button", { name: /ALL.*0\/10/ });
+    const runningBackFilter = screen.getByRole("button", { name: /RB.*0\/4/ });
+    expect(allFilter).toHaveClass("bg-teal-400");
+    expect(runningBackFilter).toHaveClass("bg-slate-800");
+    expect(screen.getByRole("button", { name: /DEF.*0\/0/ })).toBeInTheDocument();
+
+    fireEvent.click(runningBackFilter);
+    expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(4);
+    expect(runningBackFilter).toHaveClass("bg-teal-400");
+  });
+
   it("clears a player search with the clear control", () => {
     render(<App />);
 
@@ -46,7 +60,8 @@ describe("Fantasy Draft Board", () => {
     fireEvent.click(container.querySelector("li[data-id]"));
 
     expect(screen.getByRole("button", { name: "Expand player details" })).toBeInTheDocument();
-    expect(screen.getByText("Yahoo")).toBeInTheDocument();
+    expect(screen.getByText("Overall #1")).toBeInTheDocument();
+    expect(screen.getByText("☆ Not starred")).toBeInTheDocument();
   });
 
   it("opens and closes expanded player details without losing the selected player", () => {

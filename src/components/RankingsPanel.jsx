@@ -119,6 +119,7 @@ export function RankingsPanel({
   onSearchChange,
   players,
   positionRanks,
+  positionFilterCounts,
   drag,
   insertIndex,
   itemRefs,
@@ -151,17 +152,20 @@ export function RankingsPanel({
         </div>
       </div>
 
-      <div className="flex flex-nowrap items-center justify-between gap-0.5 mb-1.5">
-        {POSITION_FILTERS.map((tab) => {
-          const pastel = tab.value === "ALL" ? "bg-gray-200 text-black" : positionClass(tab.value);
-          const active = posTab === tab.value ? "ring-1 ring-black shadow-sm" : "opacity-80 hover:opacity-100";
+      <div className="grid grid-cols-8 overflow-hidden rounded-2xl border border-slate-600 mb-1.5">
+        {POSITION_FILTERS.map((tab, index) => {
+          const count = positionFilterCounts[tab.value];
+          const active = posTab === tab.value;
           return (
             <Button
               key={tab.value}
-              className={`shrink-0 px-1.5 py-1 text-[9px] ${pastel} ${active}`}
+              className={`min-w-0 h-10 rounded-none px-0 py-0 shadow-none text-[9px] leading-none ${
+                index < POSITION_FILTERS.length - 1 ? "border-r border-slate-600" : ""
+              } ${active ? "bg-teal-400 text-slate-950" : "bg-slate-800 text-slate-200 hover:bg-slate-700"}`}
               onClick={() => onPosTabChange(tab.value)}
             >
-              {tab.label}
+              <span className="block font-semibold">{tab.label}</span>
+              <span className="mt-0.5 block text-[8px] opacity-80">{count.drafted}/{count.total}</span>
             </Button>
           );
         })}

@@ -13,6 +13,7 @@ export function DraftBoard({
   onReset,
   onUndo,
   selectedPlayer,
+  selectedPositionRank,
   adp,
   stats,
   openAdp,
@@ -123,6 +124,7 @@ export function DraftBoard({
       <PlayerDetails
         dark={dark}
         selected={selectedPlayer}
+        positionRank={selectedPositionRank}
         adp={adp}
         stats={stats}
         openAdp={openAdp}
