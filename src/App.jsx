@@ -223,16 +223,16 @@ export default function App() {
 
   return (
     <div className={`${dark ? "bg-zinc-800 text-zinc-100" : "bg-gray-50 text-gray-900"} min-h-screen w-full`}>
-      <div className="w-full px-3 md:px-4 py-3 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl md:text-3xl font-bold">Fantasy Draft Board</h1>
+      <div className="w-full px-2 md:px-3 py-2 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-xl md:text-2xl font-bold">Fantasy Draft Board</h1>
             <IconToggle on={dark} onClick={() => setDark((current) => !current)} />
           </div>
           <div className="flex flex-wrap items-center gap-2" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-3 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-2 items-start">
           <RankingsPanel
             dark={dark}
             editMode={editMode}

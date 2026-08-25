@@ -21,7 +21,7 @@ function PlayerRow({
       }
       className={`rounded-md border ${
         dark ? "border-zinc-600 bg-zinc-700" : "border-gray-300 bg-white"
-      } flex items-center justify-between gap-2 p-1.5 ${
+      } flex items-center justify-between gap-1.5 px-1.5 py-1.5 ${
         editMode ? "cursor-grab" : "cursor-pointer hover:border-blue-400 hover:shadow-sm"
       } select-none ${beingDragged ? "opacity-40" : ""}`}
       onPointerDown={onPointerDown}
@@ -30,15 +30,15 @@ function PlayerRow({
       }}
       title={editMode ? "Drag to reorder" : "Click card for details; click Draft to draft"}
     >
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <span className="w-6 text-[10px] opacity-70 tabular-nums">{(player.rank ?? 0) + 1}</span>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${positionClass(player.pos)}`}>
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <span className="w-4 shrink-0 text-[9px] opacity-60 tabular-nums">{(player.rank ?? 0) + 1}</span>
+        <span className={`shrink-0 text-[9px] px-1 py-0.5 rounded-full ${positionClass(player.pos)}`}>
           {player.pos ? `${player.pos}${positionIndex ?? ""}` : "POS"}
         </span>
         {!editMode ? (
           <>
             <button
-              className="font-semibold text-[12px] hover:underline truncate"
+              className="min-w-0 flex-1 text-left font-semibold text-[12px] hover:underline truncate"
               onClick={(event) => {
                 event.stopPropagation();
                 onSelect(player.id);
@@ -47,28 +47,28 @@ function PlayerRow({
             >
               {player.name}
             </button>
-            <span className="text-[11px] opacity-70 shrink-0">{player.team || ""}</span>
+            <span className="w-7 shrink-0 text-right text-[10px] opacity-60">{player.team || ""}</span>
           </>
         ) : (
           <>
-            <span className="font-semibold text-[12px] truncate">{player.name}</span>
-            <span className="text-[11px] opacity-70 shrink-0">{player.team || ""}</span>
+            <span className="min-w-0 flex-1 font-semibold text-[12px] truncate">{player.name}</span>
+            <span className="w-7 shrink-0 text-right text-[10px] opacity-60">{player.team || ""}</span>
           </>
         )}
       </div>
 
       {!editMode && (
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-1">
           {player.target > 0 && (
             <span
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-300 text-amber-900"
+              className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[9px] font-bold bg-amber-300 text-amber-900"
               title={`Target ${player.target}`}
             >
               ★ {player.target}
             </span>
           )}
           <Button
-            className="bg-blue-900 text-white"
+            className="bg-blue-900 text-white px-2 py-1 text-[11px]"
             onClick={(event) => {
               event.stopPropagation();
               onDraft(player.id);
@@ -102,21 +102,21 @@ export function RankingsPanel({
 }) {
   return (
     <section
-      className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-2xl shadow p-3 flex flex-col min-h-0 md:sticky md:top-3 md:h-[calc(100vh-1.5rem)]`}
+      className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-2xl shadow p-2 flex flex-col min-h-0 md:sticky md:top-2 md:h-[calc(100vh-1rem)]`}
     >
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="font-bold">Overall Rankings</h2>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mb-1.5">
+        <h2 className="font-bold text-sm">Overall Rankings</h2>
+        <div className="flex items-center gap-1">
           {!editMode ? (
-            <Button onClick={() => onEditModeChange(true)} className="bg-orange-300 text-black">
+            <Button onClick={() => onEditModeChange(true)} className="bg-orange-300 text-black px-2 py-1 text-[11px]">
               Edit
             </Button>
           ) : (
             <>
-              <Button onClick={onOpenImport} className="bg-orange-300 text-black">
+              <Button onClick={onOpenImport} className="bg-orange-300 text-black px-2 py-1 text-[11px]">
                 Import
               </Button>
-              <Button onClick={() => onEditModeChange(false)} className="bg-blue-500 text-white">
+              <Button onClick={() => onEditModeChange(false)} className="bg-blue-500 text-white px-2 py-1 text-[11px]">
                 Done
               </Button>
             </>
@@ -124,14 +124,14 @@ export function RankingsPanel({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
+      <div className="flex flex-nowrap items-center gap-1 mb-1.5 overflow-x-auto">
         {POS_LIST.map((tab) => {
           const pastel = tab === "ALL" ? "bg-gray-200 text-black" : positionClass(tab);
           const active = posTab === tab ? "ring-2 ring-black" : "";
           return (
             <Button
               key={tab}
-              className={`text-xs ${pastel} ${active}`}
+              className={`shrink-0 px-2 py-1 text-[10px] ${pastel} ${active}`}
               onClick={() => onPosTabChange(tab)}
             >
               {tab}
@@ -140,7 +140,7 @@ export function RankingsPanel({
         })}
       </div>
 
-      <div className="relative mb-2">
+      <div className="relative mb-1.5">
         <Input
           placeholder="Search by name / team"
           value={search}
@@ -164,7 +164,7 @@ export function RankingsPanel({
         )}
       </div>
 
-      <ul className="space-y-1.5 flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
+      <ul className="space-y-1 flex-1 min-h-0 overflow-y-auto overscroll-contain pr-0.5">
         {players.map((player, index) => (
           <Fragment key={player.id}>
             {insertIndex === index && editMode && (

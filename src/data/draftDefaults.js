@@ -28,7 +28,7 @@ export function positionClass(pos) {
   const normalizedPos = (pos || "").toUpperCase();
   if (normalizedPos === "WR") return "bg-blue-300 text-black";
   if (normalizedPos === "RB") return "bg-green-300 text-black";
-  if (normalizedPos === "TE") return "bg-orange-300 text-black";
+  if (normalizedPos === "TE") return "bg-violet-300 text-black";
   if (normalizedPos === "QB") return "bg-pink-300 text-black";
   return "bg-gray-300 text-black";
 }
