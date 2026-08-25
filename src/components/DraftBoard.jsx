@@ -8,6 +8,7 @@ export function DraftBoard({
   editNames,
   onEditNamesChange,
   onTeamNameChange,
+  onMyTeamChange,
   history,
   players,
   onReset,
@@ -37,7 +38,7 @@ export function DraftBoard({
             className={`${editNames ? "bg-blue-500 text-white" : "bg-orange-300 text-black"} px-2 py-1 text-[11px]`}
             onClick={() => onEditNamesChange(!editNames)}
           >
-            {editNames ? "Done" : "Edit Team Names"}
+            {editNames ? "Done" : "Edit Teams"}
           </Button>
           <Button className="bg-teal-300 text-black px-2 py-1 text-[11px]" onClick={onUndo} disabled={!history.length}>
             Undo
@@ -48,33 +49,55 @@ export function DraftBoard({
       <div className="overflow-x-auto overflow-y-visible">
         <div className="relative min-w-[960px] xl:min-w-0">
           <div className="grid gap-0.5 mb-0.5" style={{ gridTemplateColumns: columns }}>
-            {Array.from({ length: settings.numTeams }, (_, column) => (
+            {Array.from({ length: settings.numTeams }, (_, column) => {
+              const isMyTeam = settings.myTeam === column;
+              return (
               <div
                 key={column}
                 className={`relative ${
-                  dark ? "bg-zinc-600 border-zinc-600" : "bg-gray-200 border-gray-200"
+                  isMyTeam
+                    ? dark ? "bg-teal-950/70 border-teal-400" : "bg-teal-100 border-teal-400"
+                    : dark ? "bg-zinc-600 border-zinc-600" : "bg-gray-200 border-gray-200"
                 } border p-1 rounded-md min-w-0`}
               >
                 {editNames ? (
-                  <input
-                    className={`w-full px-1 py-0.5 rounded border text-[11px] ${
-                      dark ? "bg-zinc-700 border-zinc-500 text-white" : ""
-                    }`}
-                    value={settings.teamNames[column] || ""}
-                    onChange={(event) => onTeamNameChange(column, event.target.value)}
-                  />
+                  <div className="flex items-center gap-0.5">
+                    <input
+                      className={`min-w-0 flex-1 px-1 py-0.5 rounded border text-[11px] ${
+                        dark ? "bg-zinc-700 border-zinc-500 text-white" : ""
+                      }`}
+                      value={settings.teamNames[column] || ""}
+                      onChange={(event) => onTeamNameChange(column, event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className={`h-6 shrink-0 rounded px-1 text-[8px] font-bold ${
+                        isMyTeam ? "bg-teal-400 text-slate-950" : dark ? "bg-zinc-700 text-zinc-300" : "bg-white text-gray-600"
+                      }`}
+                      onClick={() => onMyTeamChange(column)}
+                      aria-label={`Set ${settings.teamNames[column] || `Team ${column + 1}`} as My Team`}
+                      title={isMyTeam ? "My Team" : "Set as My Team"}
+                    >
+                      MY
+                    </button>
+                  </div>
                 ) : (
-                  <span className={`block truncate text-[11px] font-semibold ${dark ? "text-zinc-200" : "text-black"}`}>
-                    {settings.teamNames[column]}
-                  </span>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className={`block min-w-0 flex-1 truncate text-[11px] font-semibold ${dark ? "text-zinc-200" : "text-black"}`}>
+                      {settings.teamNames[column]}
+                    </span>
+                    {isMyTeam && <span className="shrink-0 rounded bg-teal-400 px-1 text-[8px] font-bold text-slate-950">MY</span>}
+                  </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {Array.from({ length: settings.numRounds }, (_, round) => (
             <div key={round} className="grid gap-0.5 mb-0.5" style={{ gridTemplateColumns: columns }}>
               {Array.from({ length: settings.numTeams }, (_, column) => {
+                const isMyTeam = settings.myTeam === column;
                 const pickIndex =
                   round * settings.numTeams +
                   (round % 2 === 0 ? column : settings.numTeams - 1 - column);
@@ -84,7 +107,9 @@ export function DraftBoard({
                   <div
                     key={column}
                     className={`relative ${
-                      dark ? "bg-zinc-800 border-zinc-600" : "bg-gray-50 border-gray-200"
+                      isMyTeam
+                        ? dark ? "bg-teal-950/20 border-teal-500/70" : "bg-teal-50 border-teal-400/70"
+                        : dark ? "bg-zinc-800 border-zinc-600" : "bg-gray-50 border-gray-200"
                     } border rounded-md p-1 min-h-[32px]`}
                   >
                     {player && (
@@ -94,30 +119,19 @@ export function DraftBoard({
                         )}`}
                       >
                         <span className="block truncate">{player.name}</span>
-                        <span className="absolute right-1 top-1/2 -translate-y-1/2 rounded bg-black/10 px-0.5 text-[8px] font-medium opacity-70">
+                        <span data-pick-number={pickIndex + 1} className="absolute right-1 top-1/2 -translate-y-1/2 rounded bg-black/10 px-0.5 text-[8px] font-medium opacity-70">
                           {pickIndex + 1}
                         </span>
                       </div>
                     )}
                     {!player && (
-                      <span className="absolute left-1.5 bottom-1 text-[9px] opacity-70">{pickIndex + 1}</span>
+                      <span data-pick-number={pickIndex + 1} className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] opacity-70">{pickIndex + 1}</span>
                     )}
                   </div>
                 );
               })}
             </div>
           ))}
-
-          {settings.myTeam != null && (
-            <div className="pointer-events-none absolute inset-0">
-              <div className="h-full grid gap-0.5" style={{ gridTemplateColumns: columns }}>
-                <div
-                  className="h-full rounded-md ring-4 ring-yellow-400"
-                  style={{ gridColumn: String(settings.myTeam + 1) }}
-                />
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

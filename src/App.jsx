@@ -240,6 +240,10 @@ export default function App() {
     });
   }
 
+  function updateMyTeam(index) {
+    setSettings((current) => ({ ...current, myTeam: index }));
+  }
+
   return (
     <div className={`${dark ? "bg-zinc-800 text-zinc-100" : "bg-gray-50 text-gray-900"} min-h-screen w-full`}>
       <div className="w-full px-2 md:px-3 py-2 space-y-2">
@@ -278,6 +282,7 @@ export default function App() {
             editNames={editNames}
             onEditNamesChange={setEditNames}
             onTeamNameChange={updateTeamName}
+            onMyTeamChange={updateMyTeam}
             history={history}
             players={players}
             onReset={resetDraft}

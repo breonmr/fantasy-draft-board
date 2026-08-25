@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
+import { STORAGE_KEY } from "./data/draftDefaults.js";
 import App from "./App.jsx";
 
 describe("Fantasy Draft Board", () => {
@@ -23,6 +24,33 @@ describe("Fantasy Draft Board", () => {
 
     expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(9);
     expect(screen.getByText("Ja'Marr Chase")).toBeInTheDocument();
+  });
+
+  it("keeps pick numbers right-aligned in empty and occupied slots", () => {
+    const { container } = render(<App />);
+
+    expect(container.querySelector('[data-pick-number="1"]')).toHaveClass("right-1", "top-1/2", "-translate-y-1/2");
+    fireEvent.click(screen.getAllByRole("button", { name: "Draft" })[0]);
+    expect(container.querySelector('[data-pick-number="1"]')).toHaveClass("right-1", "top-1/2", "-translate-y-1/2");
+  });
+
+  it("selects and persists My Team while team names are edited", () => {
+    const { unmount } = render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Teams" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set Team 3 as My Team" }));
+    fireEvent.change(screen.getByDisplayValue("Team 3"), { target: { value: "My Squad" } });
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    expect(saved.settings.myTeam).toBe(2);
+    expect(saved.settings.teamNames[2]).toBe("My Squad");
+    expect(screen.getByText("MY")).toBeInTheDocument();
+
+    unmount();
+    render(<App />);
+    expect(screen.getByText("My Squad")).toBeInTheDocument();
+    expect(screen.getByText("MY")).toBeInTheDocument();
   });
 
   it("uses a single neutral segmented filter control with drafted counts", () => {
