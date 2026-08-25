@@ -84,22 +84,22 @@ export function DraftBoard({
                     key={column}
                     className={`relative ${
                       dark ? "bg-zinc-800 border-zinc-600" : "bg-gray-50 border-gray-200"
-                    } border rounded-md p-0.5 min-h-[27px]`}
+                    } border rounded-md p-1 min-h-[32px]`}
                   >
                     {player && (
                       <div
-                        className={`relative px-1 py-0.5 pr-4 rounded-md text-[11px] font-semibold ${positionClass(
+                        className={`relative px-1 py-1 pr-4 rounded-md text-[11px] font-semibold ${positionClass(
                           player.pos
                         )}`}
                       >
                         <span className="block truncate">{player.name}</span>
-                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] font-medium opacity-60">
+                        <span className="absolute right-1 top-1/2 -translate-y-1/2 rounded bg-black/10 px-0.5 text-[8px] font-medium opacity-70">
                           {pickIndex + 1}
                         </span>
                       </div>
                     )}
                     {!player && (
-                      <span className="absolute left-1 bottom-0.5 text-[9px] opacity-70">{pickIndex + 1}</span>
+                      <span className="absolute left-1.5 bottom-1 text-[9px] opacity-70">{pickIndex + 1}</span>
                     )}
                   </div>
                 );

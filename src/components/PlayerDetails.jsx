@@ -127,27 +127,36 @@ export function PlayerDetails({
             </section>
           </div>
 
-          <section className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-2`}>
-            <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1">
-              <div>
-                <div className="text-[10px] font-medium uppercase tracking-wide opacity-60">Recent performance</div>
-                <div className="text-[11px] opacity-70">Last 3 Seasons</div>
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_220px] gap-2">
+            <section className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-2`}>
+              <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1">
+                <div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide opacity-60">Recent performance</div>
+                  <div className="text-[11px] opacity-70">Last 3 Seasons</div>
+                </div>
+                <div className="flex gap-1">
+                  <Button className="bg-orange-300 text-black px-2 py-1 text-[10px]" onClick={openStats}>
+                    Import Stats CSV
+                  </Button>
+                  <input ref={statsFileRef} type="file" accept=".csv,text/csv" className="hidden" />
+                  <Button className="bg-orange-300 text-black px-2 py-1 text-[10px]" onClick={openAdp}>
+                    Import ADP CSV
+                  </Button>
+                  <input ref={adpFileRef} type="file" accept=".csv,text/csv" className="hidden" />
+                </div>
               </div>
-              <div className="flex gap-1">
-                <Button className="bg-orange-300 text-black px-2 py-1 text-[10px]" onClick={openStats}>
-                  Import Stats CSV
-                </Button>
-                <input ref={statsFileRef} type="file" accept=".csv,text/csv" className="hidden" />
-                <Button className="bg-orange-300 text-black px-2 py-1 text-[10px]" onClick={openAdp}>
-                  Import ADP CSV
-                </Button>
-                <input ref={adpFileRef} type="file" accept=".csv,text/csv" className="hidden" />
+              <div className="overflow-auto">
+                <StatsTable position={(selected.pos || "").toUpperCase()} rows={rows} display={display} />
               </div>
-            </div>
-            <div className="overflow-auto">
-              <StatsTable position={(selected.pos || "").toUpperCase()} rows={rows} display={display} />
-            </div>
-          </section>
+            </section>
+
+            <aside className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-2`} aria-label="Recent player news">
+              <div className="text-[10px] font-medium uppercase tracking-wide opacity-60">Recent news</div>
+              <div className="mt-1 max-h-24 overflow-y-auto overscroll-contain text-[11px] opacity-70">
+                News will appear here when a data source is connected.
+              </div>
+            </aside>
+          </div>
         </div>
       )}
     </section>

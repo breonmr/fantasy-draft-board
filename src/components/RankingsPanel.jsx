@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { POS_LIST, positionClass } from "../data/draftDefaults.js";
+import { POSITION_FILTERS, positionClass } from "../data/draftDefaults.js";
 import { Button, Input } from "./ui.jsx";
 
 function PlayerRow({
@@ -12,6 +12,7 @@ function PlayerRow({
   onPointerDown,
   onDraft,
   onSelect,
+  onToggleStar,
 }) {
   return (
     <li
@@ -31,14 +32,14 @@ function PlayerRow({
       title={editMode ? "Drag to reorder" : "Click card for details; click Draft to draft"}
     >
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
-        <span className="w-4 shrink-0 text-[9px] opacity-60 tabular-nums">{(player.rank ?? 0) + 1}</span>
-        <span className={`shrink-0 text-[9px] px-1 py-0.5 rounded-full ${positionClass(player.pos)}`}>
-          {player.pos ? `${player.pos}${positionIndex ?? ""}` : "POS"}
-        </span>
+        <span
+          className={`w-2 h-2 shrink-0 rounded-full ${positionClass(player.pos)}`}
+          title={player.pos || "Position unavailable"}
+        />
         {!editMode ? (
-          <>
+          <div className="min-w-0 flex-1">
             <button
-              className="min-w-0 flex-1 text-left font-semibold text-[12px] hover:underline truncate"
+              className="block w-full text-left font-semibold text-[12px] hover:underline truncate"
               onClick={(event) => {
                 event.stopPropagation();
                 onSelect(player.id);
@@ -47,18 +48,39 @@ function PlayerRow({
             >
               {player.name}
             </button>
-            <span className="w-7 shrink-0 text-right text-[10px] opacity-60">{player.team || ""}</span>
-          </>
+            <div className="flex items-center gap-1 text-[10px] leading-tight opacity-60">
+              <span>{player.pos ? `${player.pos}${positionIndex ?? ""}` : "POS"}</span>
+              {player.team && <span>• {player.team}</span>}
+            </div>
+          </div>
         ) : (
-          <>
-            <span className="min-w-0 flex-1 font-semibold text-[12px] truncate">{player.name}</span>
-            <span className="w-7 shrink-0 text-right text-[10px] opacity-60">{player.team || ""}</span>
-          </>
+          <div className="min-w-0 flex-1">
+            <span className="block font-semibold text-[12px] truncate">{player.name}</span>
+            <div className="flex items-center gap-1 text-[10px] leading-tight opacity-60">
+              <span>{player.pos ? `${player.pos}${positionIndex ?? ""}` : "POS"}</span>
+              {player.team && <span>• {player.team}</span>}
+            </div>
+          </div>
         )}
+        <span className="w-4 shrink-0 text-right text-[9px] opacity-60 tabular-nums">{(player.rank ?? 0) + 1}</span>
       </div>
 
       {!editMode && (
         <div className="shrink-0 flex items-center gap-1">
+          <button
+            type="button"
+            className={`w-6 h-6 rounded-md text-base leading-none hover:bg-amber-100 ${
+              player.starred ? "text-amber-500" : "text-gray-400 hover:text-amber-500"
+            }`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleStar(player.id);
+            }}
+            aria-label={`${player.starred ? "Remove" : "Add"} ${player.name} ${player.starred ? "from" : "to"} watchlist`}
+            title={player.starred ? "Remove from watchlist" : "Add to watchlist"}
+          >
+            {player.starred ? "★" : "☆"}
+          </button>
           {player.target > 0 && (
             <span
               className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[9px] font-bold bg-amber-300 text-amber-900"
@@ -99,6 +121,7 @@ export function RankingsPanel({
   onPlayerPointerDown,
   onDraft,
   onSelect,
+  onToggleStar,
 }) {
   return (
     <section
@@ -124,17 +147,17 @@ export function RankingsPanel({
         </div>
       </div>
 
-      <div className="flex flex-nowrap items-center gap-1 mb-1.5 overflow-x-auto">
-        {POS_LIST.map((tab) => {
-          const pastel = tab === "ALL" ? "bg-gray-200 text-black" : positionClass(tab);
-          const active = posTab === tab ? "ring-2 ring-black" : "";
+      <div className="flex flex-nowrap items-center justify-between gap-0.5 mb-1.5">
+        {POSITION_FILTERS.map((tab) => {
+          const pastel = tab.value === "ALL" ? "bg-gray-200 text-black" : positionClass(tab.value);
+          const active = posTab === tab.value ? "ring-1 ring-black shadow-sm" : "opacity-80 hover:opacity-100";
           return (
             <Button
-              key={tab}
-              className={`shrink-0 px-2 py-1 text-[10px] ${pastel} ${active}`}
-              onClick={() => onPosTabChange(tab)}
+              key={tab.value}
+              className={`shrink-0 px-1.5 py-1 text-[9px] ${pastel} ${active}`}
+              onClick={() => onPosTabChange(tab.value)}
             >
-              {tab}
+              {tab.label}
             </Button>
           );
         })}
@@ -180,6 +203,7 @@ export function RankingsPanel({
               onPointerDown={(event) => onPlayerPointerDown(event, player.id, index)}
               onDraft={onDraft}
               onSelect={onSelect}
+              onToggleStar={onToggleStar}
             />
           </Fragment>
         ))}

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addDraft, reorderAvailablePlayers, setPlayerDrafted, undoLastDraft } from "./draft.js";
 
 const players = [
-  { id: "a", name: "A", rank: 0, drafted: false },
+  { id: "a", name: "A", rank: 0, drafted: false, starred: true },
   { id: "b", name: "B", rank: 1, drafted: true },
   { id: "c", name: "C", rank: 2, drafted: false },
   { id: "d", name: "D", rank: 3, drafted: false },
@@ -27,6 +27,7 @@ describe("draft state transitions", () => {
     expect(reordered.map((player) => player.id)).toEqual(["c", "b", "a", "d"]);
     expect(reordered.map((player) => player.rank)).toEqual([0, 1, 2, 3]);
     expect(reordered.find((player) => player.id === "b").drafted).toBe(true);
+    expect(reordered.find((player) => player.id === "a").starred).toBe(true);
   });
 
   it("keeps the dragged player at the shown downward insertion position", () => {

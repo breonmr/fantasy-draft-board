@@ -48,4 +48,14 @@ describe("Fantasy Draft Board", () => {
     expect(screen.getByText("Player profile")).toBeInTheDocument();
     expect(screen.getByText("Draft context")).toBeInTheDocument();
   });
+
+  it("toggles a player watchlist star without opening their details", () => {
+    render(<App />);
+
+    const watchlistButton = screen.getByRole("button", { name: "Add Ja'Marr Chase to watchlist" });
+    fireEvent.click(watchlistButton);
+
+    expect(screen.getByRole("button", { name: "Remove Ja'Marr Chase from watchlist" })).toBeInTheDocument();
+    expect(screen.queryByText("Player profile")).not.toBeInTheDocument();
+  });
 });

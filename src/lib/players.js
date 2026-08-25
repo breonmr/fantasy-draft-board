@@ -47,7 +47,13 @@ export function positionRankMap(players) {
 export function filterAvailablePlayers(players, position, search) {
   const available = availablePlayers(players);
   const filtered = available.filter((player) => {
-    if (position !== "ALL" && (player.pos || "") !== position) return false;
+    const playerPosition = (player.pos || "").toUpperCase();
+    const matchesPosition =
+      position === "ALL" ||
+      playerPosition === position ||
+      (position === "FLEX" && ["RB", "WR", "TE"].includes(playerPosition)) ||
+      (position === "DST" && playerPosition === "DEF");
+    if (!matchesPosition) return false;
     if (!search.trim()) return true;
     const haystack = `${player.name} ${player.pos || ""} ${player.team || ""}`.toLowerCase();
     return haystack.includes(search.toLowerCase());
@@ -67,6 +73,10 @@ export function filterAvailablePlayers(players, position, search) {
     if (aHas !== bHas) return aHas ? -1 : 1;
     return aName.localeCompare(bName);
   });
+}
+
+export function togglePlayerStar(players, id) {
+  return players.map((player) => (player.id === id ? { ...player, starred: !player.starred } : player));
 }
 
 export function mergeStatsData(current, imported) {

@@ -6,7 +6,14 @@ import { RankingsPanel } from "./components/RankingsPanel.jsx";
 import { IconToggle } from "./components/ui.jsx";
 import { addDraft, reorderAvailablePlayers, resetPlayers, setPlayerDrafted, undoLastDraft } from "./lib/draft.js";
 import { parseAdpCSV, parseImportLine, parsePlayersCSV, parseStatsCSV } from "./lib/parsers.js";
-import { availablePlayers, createPlayers, filterAvailablePlayers, mergeStatsData, positionRankMap } from "./lib/players.js";
+import {
+  availablePlayers,
+  createPlayers,
+  filterAvailablePlayers,
+  mergeStatsData,
+  positionRankMap,
+  togglePlayerStar,
+} from "./lib/players.js";
 import { loadDarkMode, loadDraftState, saveDarkMode, saveDraftState } from "./lib/storage.js";
 
 export default function App() {
@@ -61,6 +68,10 @@ export default function App() {
     setPlayers((current) => setPlayerDrafted(current, id, true));
     setHistory((current) => addDraft(current, id));
     if (search.trim()) setSearch("");
+  }
+
+  function toggleStar(id) {
+    setPlayers((current) => togglePlayerStar(current, id));
   }
 
   function undoLast() {
@@ -250,6 +261,7 @@ export default function App() {
             onPlayerPointerDown={startDrag}
             onDraft={draftPlayer}
             onSelect={setSelectedId}
+            onToggleStar={toggleStar}
           />
           <DraftBoard
             dark={dark}

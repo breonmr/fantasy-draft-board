@@ -22,7 +22,16 @@ export const STARTERS = [
   "2, RB, IND, Jonathan Taylor",
 ];
 
-export const POS_LIST = ["ALL", "RB", "WR", "QB", "TE", "K", "DST"];
+export const POSITION_FILTERS = [
+  { value: "ALL", label: "ALL" },
+  { value: "QB", label: "QB" },
+  { value: "RB", label: "RB" },
+  { value: "WR", label: "WR" },
+  { value: "TE", label: "TE" },
+  { value: "FLEX", label: "FLEX" },
+  { value: "K", label: "K" },
+  { value: "DST", label: "DST/DEF" },
+];
 
 export function positionClass(pos) {
   const normalizedPos = (pos || "").toUpperCase();
@@ -30,5 +39,7 @@ export function positionClass(pos) {
   if (normalizedPos === "RB") return "bg-green-300 text-black";
   if (normalizedPos === "TE") return "bg-violet-300 text-black";
   if (normalizedPos === "QB") return "bg-pink-300 text-black";
+  if (normalizedPos === "FLEX") return "bg-cyan-300 text-black";
+  if (normalizedPos === "K") return "bg-yellow-300 text-black";
   return "bg-gray-300 text-black";
 }
