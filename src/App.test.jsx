@@ -57,14 +57,16 @@ describe("Fantasy Draft Board", () => {
     expect(screen.getByText("MY")).toBeInTheDocument();
   });
 
-  it("uses a single neutral segmented filter control with drafted counts", () => {
+  it("uses a single neutral segmented filter control", () => {
     render(<App />);
 
-    const allFilter = screen.getByRole("button", { name: /ALL.*0\/10/ });
-    const runningBackFilter = screen.getByRole("button", { name: /RB.*0\/4/ });
+    const allFilter = screen.getByRole("button", { name: "ALL" });
+    const runningBackFilter = screen.getByRole("button", { name: "RB" });
     expect(allFilter).toHaveClass("bg-teal-400");
     expect(runningBackFilter).toHaveClass("bg-slate-800");
-    expect(screen.getByRole("button", { name: /DEF.*0\/0/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "DEF" })).toBeInTheDocument();
+    expect(screen.getByText("FLEX")).not.toHaveClass("truncate");
+    expect(screen.getByText("DEF")).not.toHaveClass("truncate");
 
     fireEvent.click(runningBackFilter);
     expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(4);

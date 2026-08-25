@@ -271,9 +271,9 @@ export function PlayerDetails({
       {!selected ? (
         <div className="mt-1 text-[11px] opacity-70">Select an available player to view draft details.</div>
       ) : (
-        <div className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 ${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-1.5`}>
-          <div className="min-w-[180px] flex-1"><PlayerIdentity selected={selected} metadata={metadata} compact /></div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] opacity-70">
+        <div className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 ${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-1.5`}>
+          <div className="min-w-0"><PlayerIdentity selected={selected} metadata={metadata} compact /></div>
+          <div className="flex max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] opacity-70">
             <span>Overall #{(selected.rank ?? 0) + 1}</span>
             <span>{selected.pos || "POS"}{positionRank ?? "—"}</span>
             <span className={selected.starred ? "text-amber-500 opacity-100" : ""}>{selected.starred ? "★ Starred" : "☆ Not starred"}</span>

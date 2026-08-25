@@ -119,7 +119,6 @@ export function RankingsPanel({
   onSearchChange,
   players,
   positionRanks,
-  positionFilterCounts,
   drag,
   insertIndex,
   itemRefs,
@@ -152,20 +151,18 @@ export function RankingsPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-8 overflow-hidden rounded-2xl border border-slate-600 mb-1.5">
+      <div className="flex w-full overflow-hidden rounded-2xl border border-slate-600 mb-1.5">
         {POSITION_FILTERS.map((tab, index) => {
-          const count = positionFilterCounts[tab.value];
           const active = posTab === tab.value;
           return (
             <Button
               key={tab.value}
-              className={`flex min-w-0 h-10 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-none px-0 py-0 shadow-none text-[8px] leading-none ${
+              className={`flex h-8 flex-[1_1_auto] items-center justify-center rounded-none px-1 py-0 shadow-none text-[9px] font-medium leading-none ${
                 index < POSITION_FILTERS.length - 1 ? "border-r border-slate-600" : ""
               } ${active ? "bg-teal-400 text-slate-950" : "bg-slate-800 text-slate-200 hover:bg-slate-700"}`}
               onClick={() => onPosTabChange(tab.value)}
             >
-              <span className="block max-w-full truncate whitespace-nowrap font-medium leading-none">{tab.label}</span>
-              <span className="block max-w-full truncate whitespace-nowrap text-[7px] leading-none opacity-80">{count.drafted}/{count.total}</span>
+              <span className="whitespace-nowrap font-medium leading-none">{tab.label}</span>
             </Button>
           );
         })}

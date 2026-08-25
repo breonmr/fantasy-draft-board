@@ -4,7 +4,6 @@ import { DraftBoard } from "./components/DraftBoard.jsx";
 import { ImportModal } from "./components/ImportModal.jsx";
 import { RankingsPanel } from "./components/RankingsPanel.jsx";
 import { IconToggle } from "./components/ui.jsx";
-import { POSITION_FILTERS } from "./data/draftDefaults.js";
 import { addDraft, reorderAvailablePlayers, resetPlayers, setPlayerDrafted, undoLastDraft } from "./lib/draft.js";
 import { parseAdpCSV, parseImportLine, parsePlayersCSV, parseStatsCSV } from "./lib/parsers.js";
 import {
@@ -13,7 +12,6 @@ import {
   filterAvailablePlayers,
   mergeStatsData,
   playersByRank,
-  positionFilterCount,
   positionRankMap,
   togglePlayerStar,
 } from "./lib/players.js";
@@ -63,10 +61,6 @@ export default function App() {
   const available = useMemo(() => availablePlayers(players), [players]);
   const positionRanks = useMemo(() => positionRankMap(available), [available]);
   const allPositionRanks = useMemo(() => positionRankMap(playersByRank(players)), [players]);
-  const positionFilterCounts = useMemo(
-    () => Object.fromEntries(POSITION_FILTERS.map(({ value }) => [value, positionFilterCount(players, value)])),
-    [players]
-  );
   const filteredAvailable = useMemo(
     () => filterAvailablePlayers(players, posTab, search),
     [players, posTab, search]
@@ -290,7 +284,6 @@ export default function App() {
             onSearchChange={setSearch}
             players={filteredAvailable}
             positionRanks={positionRanks}
-            positionFilterCounts={positionFilterCounts}
             drag={drag}
             insertIndex={insertIndex}
             itemRefs={itemRefs}
