@@ -32,10 +32,6 @@ function PlayerRow({
       title={editMode ? "Drag to reorder" : "Click card for details; click Draft to draft"}
     >
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
-        <span
-          className={`w-2 h-2 shrink-0 rounded-full ${positionClass(player.pos)}`}
-          title={player.pos || "Position unavailable"}
-        />
         {!editMode ? (
           <div className="min-w-0 flex-1">
             <button
@@ -49,6 +45,10 @@ function PlayerRow({
               {player.name}
             </button>
             <div className="flex items-center gap-1 text-[10px] leading-tight opacity-60">
+              <span
+                className={`w-2 h-2 shrink-0 rounded-full ${positionClass(player.pos)}`}
+                title={player.pos || "Position unavailable"}
+              />
               <span>{player.pos ? `${player.pos}${positionIndex ?? ""}` : "POS"}</span>
               {player.team && <span>• {player.team}</span>}
             </div>
@@ -57,6 +57,10 @@ function PlayerRow({
           <div className="min-w-0 flex-1">
             <span className="block font-semibold text-[12px] truncate">{player.name}</span>
             <div className="flex items-center gap-1 text-[10px] leading-tight opacity-60">
+              <span
+                className={`w-2 h-2 shrink-0 rounded-full ${positionClass(player.pos)}`}
+                title={player.pos || "Position unavailable"}
+              />
               <span>{player.pos ? `${player.pos}${positionIndex ?? ""}` : "POS"}</span>
               {player.team && <span>• {player.team}</span>}
             </div>

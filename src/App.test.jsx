@@ -45,8 +45,21 @@ describe("Fantasy Draft Board", () => {
 
     fireEvent.click(container.querySelector("li[data-id]"));
 
-    expect(screen.getByText("Player profile")).toBeInTheDocument();
-    expect(screen.getByText("Draft context")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Expand player details" })).toBeInTheDocument();
+    expect(screen.getByText("Yahoo")).toBeInTheDocument();
+  });
+
+  it("opens and closes expanded player details without losing the selected player", () => {
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector("li[data-id]"));
+    fireEvent.click(screen.getByRole("button", { name: "Expand player details" }));
+
+    expect(screen.getByRole("dialog", { name: "Expanded player details" })).toBeInTheDocument();
+    expect(screen.getByText("Recent performance")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close expanded player details" }));
+    expect(screen.queryByRole("dialog", { name: "Expanded player details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Expand player details" })).toBeInTheDocument();
   });
 
   it("toggles a player watchlist star without opening their details", () => {
