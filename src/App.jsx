@@ -54,7 +54,7 @@ const norm = (s) =>
 ===================================================== */
 function parseImportLine(line) {
   // Accept: "Tier, POS, Team, Name[, Target]"
-  const parts = line.split(/[,\|\t]/).map((s) => s.trim()).filter(Boolean);
+  const parts = line.split(/[,|\t]/).map((s) => s.trim()).filter(Boolean);
   if (parts.length >= 4 && /^\d+$/.test(parts[0])) {
     const tier = Math.max(1, parseInt(parts[0], 10) || 1);
     const posToken = (parts[1] || "").toUpperCase();
@@ -305,7 +305,9 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(DARK_KEY, dark ? "1" : "0");
-    } catch {}
+    } catch {
+      // Ignore unavailable browser storage.
+    }
   }, [dark]);
 
   // persist
@@ -315,7 +317,9 @@ export default function App() {
         STORAGE_KEY,
         JSON.stringify({ players, history, settings, adp, stats })
       );
-    } catch {}
+    } catch {
+      // Ignore unavailable browser storage.
+    }
   }, [players, history, settings, adp, stats]);
 
   /* ---------- Derived lists ---------- */

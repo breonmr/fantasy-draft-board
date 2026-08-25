@@ -1,0 +1,14 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+coverage/
+
+# Local environment and logs
+.env
+.env.*
+*.log
+
+# macOS and editor files
+.DS_Store
+.vscode/
+.idea/
