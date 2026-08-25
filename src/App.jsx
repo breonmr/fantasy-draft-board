@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DragOverlay } from "./components/DragOverlay.jsx";
 import { DraftBoard } from "./components/DraftBoard.jsx";
 import { ImportModal } from "./components/ImportModal.jsx";
@@ -17,6 +17,7 @@ import {
   positionRankMap,
   togglePlayerStar,
 } from "./lib/players.js";
+import { enrichPlayersWithSleeper, fetchSleeperPlayers, isSleeperCacheFresh } from "./lib/sleeper.js";
 import { loadDarkMode, loadDraftState, saveDarkMode, saveDraftState } from "./lib/storage.js";
 
 export default function App() {
@@ -26,6 +27,9 @@ export default function App() {
   const [settings, setSettings] = useState(initialState.settings);
   const [adp, setAdp] = useState(initialState.adp);
   const [stats, setStats] = useState(initialState.stats);
+  const [sleeperLastUpdatedAt, setSleeperLastUpdatedAt] = useState(initialState.sleeperLastUpdatedAt);
+  const [sleeperRefreshState, setSleeperRefreshState] = useState("idle");
+  const [sleeperRefreshError, setSleeperRefreshError] = useState("");
 
   const [editMode, setEditMode] = useState(false);
   const [editNames, setEditNames] = useState(false);
@@ -53,8 +57,8 @@ export default function App() {
   }, [dark]);
 
   useEffect(() => {
-    saveDraftState({ players, history, settings, adp, stats });
-  }, [players, history, settings, adp, stats]);
+    saveDraftState({ players, history, settings, adp, stats, sleeperLastUpdatedAt });
+  }, [players, history, settings, adp, stats, sleeperLastUpdatedAt]);
 
   const available = useMemo(() => availablePlayers(players), [players]);
   const positionRanks = useMemo(() => positionRankMap(available), [available]);
@@ -71,6 +75,23 @@ export default function App() {
   filteredAvailableRef.current = filteredAvailable;
   const selectedPlayer = players.find((player) => player.id === selectedId) || null;
   const draggingPlayer = drag ? players.find((player) => player.id === drag.id) : null;
+
+  const refreshSleeperData = useCallback(async ({ force = false, playersToCheck = players } = {}) => {
+    const needsEnrichment = playersToCheck.some((player) => !player.sleeper?.status);
+    if (!force && isSleeperCacheFresh(sleeperLastUpdatedAt) && !needsEnrichment) return;
+
+    setSleeperRefreshState("loading");
+    setSleeperRefreshError("");
+    try {
+      const sleeperPlayers = await fetchSleeperPlayers();
+      setPlayers((current) => enrichPlayersWithSleeper(current, sleeperPlayers));
+      setSleeperLastUpdatedAt(Date.now());
+      setSleeperRefreshState("idle");
+    } catch (error) {
+      setSleeperRefreshState("error");
+      setSleeperRefreshError(error instanceof Error ? error.message : "Unable to refresh player data");
+    }
+  }, [players, sleeperLastUpdatedAt]);
 
   function draftPlayer(id) {
     setPlayers((current) => setPlayerDrafted(current, id, true));
@@ -176,11 +197,13 @@ export default function App() {
 
   function importPlayers(rows) {
     if (!rows.length) return;
-    setPlayers(createPlayers(rows));
+    const importedPlayers = createPlayers(rows);
+    setPlayers(importedPlayers);
     setHistory([]);
     setImportText("");
     setImportOpen(false);
     setEditMode(false);
+    void refreshSleeperData({ playersToCheck: importedPlayers });
   }
 
   function importFromText() {
@@ -295,6 +318,9 @@ export default function App() {
             openStats={() => statsFileRef.current?.click()}
             statsFileRef={statsFileRef}
             adpFileRef={adpFileRef}
+            onRefreshPlayerData={() => refreshSleeperData({ force: true })}
+            sleeperRefreshState={sleeperRefreshState}
+            sleeperRefreshError={sleeperRefreshError}
           />
         </div>
       </div>

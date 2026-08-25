@@ -13,6 +13,7 @@ export function createDefaultDraftState() {
     settings: defaultSettings(),
     adp: {},
     stats: {},
+    sleeperLastUpdatedAt: null,
   };
 }
 
@@ -22,7 +23,7 @@ export function loadDraftState(storage = localStorage) {
     if (!raw) throw new Error("No saved state");
     const saved = JSON.parse(raw);
     if (Array.isArray(saved)) {
-      return { players: saved, history: [], settings: defaultSettings(), adp: {}, stats: {} };
+      return { players: saved, history: [], settings: defaultSettings(), adp: {}, stats: {}, sleeperLastUpdatedAt: null };
     }
     return {
       players: saved.players || [],
@@ -30,6 +31,7 @@ export function loadDraftState(storage = localStorage) {
       settings: { ...defaultSettings(), ...(saved.settings || {}) },
       adp: saved.adp || {},
       stats: saved.stats || {},
+      sleeperLastUpdatedAt: saved.sleeperLastUpdatedAt || null,
     };
   } catch {
     return createDefaultDraftState();

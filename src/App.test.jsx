@@ -1,11 +1,15 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY } from "./data/draftDefaults.js";
 import App from "./App.jsx";
 
 describe("Fantasy Draft Board", () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders the board with its starter rankings", () => {
@@ -65,6 +69,41 @@ describe("Fantasy Draft Board", () => {
     fireEvent.click(runningBackFilter);
     expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(4);
     expect(runningBackFilter).toHaveClass("bg-teal-400");
+  });
+
+  it("manually refreshes selected player metadata without changing rankings", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        "100": {
+          player_id: "100",
+          first_name: "Ja'Marr",
+          last_name: "Chase",
+          position: "WR",
+          team: "CIN",
+          age: 26,
+          height: "6'0\"",
+          college: "LSU",
+          active: true,
+        },
+      }),
+    }));
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector("li[data-id]"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Player Data" }));
+
+    await waitFor(() => expect(screen.getByText("Age 26")).toBeInTheDocument());
+    expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(10);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0].sleeper.playerId).toBe("100");
+  });
+
+  it("keeps the board usable when a metadata refresh fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Player Data" }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Player data refresh failed"));
+    expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(10);
   });
 
   it("clears a player search with the clear control", () => {

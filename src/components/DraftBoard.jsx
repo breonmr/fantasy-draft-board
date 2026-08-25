@@ -21,6 +21,9 @@ export function DraftBoard({
   openStats,
   statsFileRef,
   adpFileRef,
+  onRefreshPlayerData,
+  sleeperRefreshState,
+  sleeperRefreshError,
 }) {
   const columns = `repeat(${settings.numTeams}, minmax(0, 1fr))`;
 
@@ -145,6 +148,9 @@ export function DraftBoard({
         openStats={openStats}
         statsFileRef={statsFileRef}
         adpFileRef={adpFileRef}
+        onRefreshPlayerData={onRefreshPlayerData}
+        sleeperRefreshState={sleeperRefreshState}
+        sleeperRefreshError={sleeperRefreshError}
       />
     </section>
   );

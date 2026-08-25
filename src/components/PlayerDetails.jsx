@@ -88,7 +88,52 @@ function AdpSummary({ selectedAdp, showEmpty = false }) {
   );
 }
 
-function PlayerIdentity({ selected, compact = false }) {
+function availabilityLabel(metadata) {
+  if (!metadata) return null;
+  if (metadata.injuryStatus) return `Injury: ${metadata.injuryStatus}`;
+  if (metadata.active === false) return metadata.availability || "Inactive";
+  return null;
+}
+
+function compactMetadataFacts(metadata) {
+  if (!metadata) return [];
+  return [
+    metadata.age && `Age ${metadata.age}`,
+    metadata.height,
+    metadata.weight && `${metadata.weight} lb`,
+    metadata.yearsExp !== undefined && `${metadata.yearsExp} yr exp`,
+    metadata.college,
+  ].filter(Boolean);
+}
+
+function MetadataGrid({ metadata }) {
+  if (!metadata) return null;
+  const facts = [
+    ["Age", metadata.age],
+    ["Height", metadata.height],
+    ["Weight", metadata.weight && `${metadata.weight} lb`],
+    ["Experience", metadata.yearsExp !== undefined && `${metadata.yearsExp} years`],
+    ["College", metadata.college],
+    ["Jersey", metadata.number && `#${metadata.number}`],
+    ["Depth chart", metadata.depthChartPosition && `${metadata.depthChartPosition}${metadata.depthChartOrder ? ` ${metadata.depthChartOrder}` : ""}`],
+    ["Practice", metadata.practiceParticipation],
+    ["Injury started", metadata.injuryStartDate],
+  ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+
+  if (!facts.length) return null;
+  return (
+    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-3">
+      {facts.map(([label, value]) => (
+        <div key={label}>
+          <dt className="opacity-60">{label}</dt>
+          <dd className="font-medium truncate">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function PlayerIdentity({ selected, metadata, compact = false }) {
   const initials = selected.name
     .split(" ")
     .map((part) => part[0])
@@ -105,14 +150,14 @@ function PlayerIdentity({ selected, compact = false }) {
         <div className={`${compact ? "text-sm" : "text-base"} font-bold truncate`}>{selected.name}</div>
         <div className="text-[11px] opacity-70">
           {selected.pos || "POS"} • {selected.team || "TEAM"}
-          {selected.status && ` • ${selected.status}`}
+          {availabilityLabel(metadata) && <span className="font-semibold text-rose-600 opacity-100"> • {availabilityLabel(metadata)}</span>}
         </div>
       </div>
     </div>
   );
 }
 
-function ExpandedDetails({ dark, selected, selectedAdp, rows, display, openAdp, openStats, statsFileRef, adpFileRef, onClose }) {
+function ExpandedDetails({ dark, selected, metadata, selectedAdp, rows, display, openAdp, openStats, statsFileRef, adpFileRef, onClose }) {
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 p-3 md:p-6">
       <section
@@ -135,7 +180,8 @@ function ExpandedDetails({ dark, selected, selectedAdp, rows, display, openAdp, 
           <div className="space-y-2 min-w-0">
             <section className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-2`}>
               <div className="text-[10px] font-medium uppercase tracking-wide opacity-60">Player profile</div>
-              <div className="mt-1"><PlayerIdentity selected={selected} /></div>
+              <div className="mt-1"><PlayerIdentity selected={selected} metadata={metadata} /></div>
+              <MetadataGrid metadata={metadata} />
             </section>
 
             <section className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-2`}>
@@ -169,7 +215,20 @@ function ExpandedDetails({ dark, selected, selectedAdp, rows, display, openAdp, 
   );
 }
 
-export function PlayerDetails({ dark, selected, positionRank, adp, stats, openAdp, openStats, statsFileRef, adpFileRef }) {
+export function PlayerDetails({
+  dark,
+  selected,
+  positionRank,
+  adp,
+  stats,
+  openAdp,
+  openStats,
+  statsFileRef,
+  adpFileRef,
+  onRefreshPlayerData,
+  sleeperRefreshState,
+  sleeperRefreshError,
+}) {
   const [expanded, setExpanded] = useState(false);
   const playerKey = selected ? normalizePlayerName(selected.name) : null;
   const selectedAdp = playerKey ? adp[playerKey] || {} : {};
@@ -180,34 +239,49 @@ export function PlayerDetails({ dark, selected, positionRank, adp, stats, openAd
   const latestSummary = selected ? recentStatsSummary((selected.pos || "").toUpperCase(), rows[0]) : null;
   const latestNewsItem = Array.isArray(selected?.news) ? selected.news[0] : null;
   const latestHeadline = typeof latestNewsItem === "string" ? latestNewsItem : latestNewsItem?.headline;
+  const metadata = selected?.sleeper?.status === "matched" ? selected.sleeper : null;
+  const metadataFacts = compactMetadataFacts(metadata);
 
   return (
     <section className={`${dark ? "bg-zinc-800" : "bg-gray-50"} rounded-xl p-1.5 mt-1.5 w-full`}>
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-semibold text-sm">Player Details</h3>
-        {selected && (
+        <div className="flex items-center gap-1">
           <Button
             className="bg-gray-200 text-black px-2 py-1 text-[10px]"
-            onClick={() => setExpanded(true)}
-            aria-label="Expand player details"
+            onClick={onRefreshPlayerData}
+            disabled={sleeperRefreshState === "loading"}
           >
-            Expand
+            {sleeperRefreshState === "loading" ? "Refreshing…" : "Refresh Player Data"}
           </Button>
-        )}
+          {selected && (
+            <Button
+              className="bg-gray-200 text-black px-2 py-1 text-[10px]"
+              onClick={() => setExpanded(true)}
+              aria-label="Expand player details"
+            >
+              Expand
+            </Button>
+          )}
+        </div>
       </div>
+
+      {sleeperRefreshError && <div className="mt-1 text-[10px] text-rose-600" role="status">Player data refresh failed. Saved data remains available.</div>}
 
       {!selected ? (
         <div className="mt-1 text-[11px] opacity-70">Select an available player to view draft details.</div>
       ) : (
         <div className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 ${dark ? "bg-zinc-700" : "bg-white"} rounded-lg p-1.5`}>
-          <div className="min-w-[180px] flex-1"><PlayerIdentity selected={selected} compact /></div>
+          <div className="min-w-[180px] flex-1"><PlayerIdentity selected={selected} metadata={metadata} compact /></div>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] opacity-70">
             <span>Overall #{(selected.rank ?? 0) + 1}</span>
             <span>{selected.pos || "POS"}{positionRank ?? "—"}</span>
             <span className={selected.starred ? "text-amber-500 opacity-100" : ""}>{selected.starred ? "★ Starred" : "☆ Not starred"}</span>
             <AdpSummary selectedAdp={selectedAdp} />
+            {metadataFacts.map((fact) => <span key={fact}>{fact}</span>)}
             {latestSummary && <span>Stats {latestSummary}</span>}
             {latestHeadline && <span className="max-w-48 truncate">News {latestHeadline}</span>}
+            {selected.sleeper?.status === "unmatched" && <span title="No confident Sleeper match was found">Metadata unavailable</span>}
           </div>
         </div>
       )}
@@ -216,6 +290,7 @@ export function PlayerDetails({ dark, selected, positionRank, adp, stats, openAd
         <ExpandedDetails
           dark={dark}
           selected={selected}
+          metadata={metadata}
           selectedAdp={selectedAdp}
           rows={rows}
           display={display}

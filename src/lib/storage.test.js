@@ -30,6 +30,7 @@ describe("draft storage", () => {
       settings: { numTeams: 10, numRounds: 15, teamNames: ["One"], myTeam: 0 },
       adp: { a: { yahoo: 1 } },
       stats: { a: { "2025": { receptions: 10 } } },
+      sleeperLastUpdatedAt: 1234567,
     };
 
     saveDraftState(state, storage);
