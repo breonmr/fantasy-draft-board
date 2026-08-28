@@ -22,6 +22,7 @@ export function createPlayers(rows) {
     tier: row.tier || 1,
     target: row.target || 0,
     targetRound: normalizeTargetRound(row.targetRound),
+    ...(Number.isFinite(row.adp) ? { adp: row.adp } : {}),
     drafted: false,
     rank: index,
   }));

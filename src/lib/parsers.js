@@ -36,6 +36,7 @@ export function parsePlayersCSV(text) {
   const teamIndex = getIndex("team");
   const nameIndex = getIndex("name", "player", "player name");
   const targetIndex = getIndex("target");
+  const adpIndex = getIndex("adp");
 
   return lines.slice(1).map((line) => {
     const parts = line.split(",").map((part) => part.trim());
@@ -46,7 +47,8 @@ export function parsePlayersCSV(text) {
     const team = teamIndex >= 0 ? (parts[teamIndex] || "").toUpperCase() : "";
     const name = nameIndex >= 0 ? parts[nameIndex] || "" : line;
     const target = targetIndex >= 0 ? Math.max(0, parseInt(parts[targetIndex] || "0", 10) || 0) : 0;
-    return { tier, pos, team, name, target };
+    const adp = adpIndex >= 0 ? parseFloat(parts[adpIndex]) : NaN;
+    return { tier, pos, team, name, target, ...(Number.isFinite(adp) ? { adp } : {}) };
   });
 }
 

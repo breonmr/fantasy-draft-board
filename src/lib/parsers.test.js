@@ -27,6 +27,12 @@ describe("player import parsing", () => {
     ]);
   });
 
+  it("keeps an optional static ADP column when present", () => {
+    expect(parsePlayersCSV("Name,Position,Team,ADP\nAmon-Ra St. Brown,WR,DET,14.2")).toEqual([
+      { tier: 1, pos: "WR", team: "DET", name: "Amon-Ra St. Brown", target: 0, adp: 14.2 },
+    ]);
+  });
+
   it("merges recognized ADP sources and maps stat header aliases", () => {
     expect(parseAdpCSV("name,adp,source\nAmon-Ra St. Brown,14.2,Yahoo\nAmon-Ra St. Brown,13.1,FantasyPros")).toEqual({
       "amonra st brown": { yahoo: 14.2, fantasypros: 13.1 },
