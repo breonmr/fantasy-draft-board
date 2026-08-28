@@ -92,12 +92,12 @@ describe("Fantasy Draft Board", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: "Increase Ja'Marr Chase target round" }));
 
-    expect(screen.getAllByTitle("Target round 1")).toHaveLength(2);
+    expect(screen.getAllByTitle("Target round 1")).toHaveLength(3);
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0].targetRound).toBe(1);
 
     view.unmount();
     render(<App />);
-    expect(screen.getAllByTitle("Target round 1")).toHaveLength(2);
+    expect(screen.getAllByTitle("Target round 1")).toHaveLength(3);
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: "Clear Ja'Marr Chase target round" }));

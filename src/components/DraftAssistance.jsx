@@ -28,14 +28,14 @@ export function DraftAssistance({ dark, players, history, settings, positionRank
       <section className={`${dark ? "bg-zinc-800" : "bg-gray-50"} min-w-0 rounded-lg p-1.5`} aria-labelledby="targets-heading">
         <div className="mb-1 flex items-baseline justify-between gap-2">
           <h3 id="targets-heading" className="text-sm font-semibold">Targets</h3>
-          <span className="text-[9px] opacity-60">Favorites</span>
+          <span className="text-[9px] opacity-60">Favorites & targets</span>
         </div>
         {targets.length ? (
           <ul className="space-y-1" aria-label="Actionable targets">
             {targets.map((player) => <PlayerLine key={player.id} player={player} positionRank={positionRanks[player.id]} />)}
           </ul>
         ) : (
-          <p className="text-[10px] opacity-65">Star players in Rankings to build your draft cheat sheet.</p>
+          <p className="text-[10px] opacity-65">Star players or assign target rounds in Rankings to build your draft cheat sheet.</p>
         )}
       </section>
 
