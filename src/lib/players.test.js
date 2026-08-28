@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterAvailablePlayers, positionFilterCount, togglePlayerStar } from "./players.js";
+import { filterAvailablePlayers, positionFilterCount, setPlayerTargetRound, togglePlayerStar } from "./players.js";
 
 const players = [
   { id: "qb", name: "Quarterback", pos: "QB", drafted: false, rank: 0 },
@@ -31,5 +31,14 @@ describe("available-player helpers", () => {
     expect(starred.find((player) => player.id === "wr").starred).toBe(true);
     expect(starred.find((player) => player.id === "rb")).toBe(players[1]);
     expect(togglePlayerStar(starred, "wr").find((player) => player.id === "wr").starred).toBe(false);
+  });
+
+  it("sets and clears a bounded target round without changing other players", () => {
+    const targeted = setPlayerTargetRound(players, "wr", 7);
+    expect(targeted.find((player) => player.id === "wr").targetRound).toBe(7);
+    expect(targeted.find((player) => player.id === "rb")).toBe(players[1]);
+
+    expect(setPlayerTargetRound(targeted, "wr", null).find((player) => player.id === "wr").targetRound).toBeNull();
+    expect(setPlayerTargetRound(targeted, "wr", 17).find((player) => player.id === "wr").targetRound).toBeNull();
   });
 });

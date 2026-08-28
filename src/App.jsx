@@ -1,21 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DragOverlay } from "./components/DragOverlay.jsx";
 import { DraftBoard } from "./components/DraftBoard.jsx";
 import { ImportModal } from "./components/ImportModal.jsx";
 import { RankingsPanel } from "./components/RankingsPanel.jsx";
 import { IconToggle } from "./components/ui.jsx";
 import { addDraft, reorderAvailablePlayers, resetPlayers, setPlayerDrafted, undoLastDraft } from "./lib/draft.js";
-import { parseAdpCSV, parseImportLine, parsePlayersCSV, parseStatsCSV } from "./lib/parsers.js";
+import { parseImportLine, parsePlayersCSV } from "./lib/parsers.js";
 import {
   availablePlayers,
   createPlayers,
   filterAvailablePlayers,
-  mergeStatsData,
-  playersByRank,
   positionRankMap,
+  setPlayerTargetRound,
   togglePlayerStar,
 } from "./lib/players.js";
-import { enrichPlayersWithSleeper, fetchSleeperPlayers, isSleeperCacheFresh } from "./lib/sleeper.js";
 import { loadDarkMode, loadDraftState, saveDarkMode, saveDraftState } from "./lib/storage.js";
 
 export default function App() {
@@ -23,11 +21,10 @@ export default function App() {
   const [players, setPlayers] = useState(initialState.players);
   const [history, setHistory] = useState(initialState.history);
   const [settings, setSettings] = useState(initialState.settings);
-  const [adp, setAdp] = useState(initialState.adp);
-  const [stats, setStats] = useState(initialState.stats);
-  const [sleeperLastUpdatedAt, setSleeperLastUpdatedAt] = useState(initialState.sleeperLastUpdatedAt);
-  const [sleeperRefreshState, setSleeperRefreshState] = useState("idle");
-  const [sleeperRefreshError, setSleeperRefreshError] = useState("");
+  // Preserve legacy enrichment data in saved drafts without using live data sources.
+  const [adp] = useState(initialState.adp);
+  const [stats] = useState(initialState.stats);
+  const [sleeperLastUpdatedAt] = useState(initialState.sleeperLastUpdatedAt);
 
   const [editMode, setEditMode] = useState(false);
   const [editNames, setEditNames] = useState(false);
@@ -35,12 +32,9 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
-  const [selectedId, setSelectedId] = useState(null);
   const [dark, setDark] = useState(() => loadDarkMode());
 
   const fileInputRef = useRef(null);
-  const adpFileRef = useRef(null);
-  const statsFileRef = useRef(null);
   const itemRefs = useRef(new Map());
   const rectsRef = useRef([]);
   const availableRef = useRef([]);
@@ -60,32 +54,13 @@ export default function App() {
 
   const available = useMemo(() => availablePlayers(players), [players]);
   const positionRanks = useMemo(() => positionRankMap(available), [available]);
-  const allPositionRanks = useMemo(() => positionRankMap(playersByRank(players)), [players]);
   const filteredAvailable = useMemo(
     () => filterAvailablePlayers(players, posTab, search),
     [players, posTab, search]
   );
   availableRef.current = available;
   filteredAvailableRef.current = filteredAvailable;
-  const selectedPlayer = players.find((player) => player.id === selectedId) || null;
   const draggingPlayer = drag ? players.find((player) => player.id === drag.id) : null;
-
-  const refreshSleeperData = useCallback(async ({ force = false, playersToCheck = players } = {}) => {
-    const needsEnrichment = playersToCheck.some((player) => !player.sleeper?.status);
-    if (!force && isSleeperCacheFresh(sleeperLastUpdatedAt) && !needsEnrichment) return;
-
-    setSleeperRefreshState("loading");
-    setSleeperRefreshError("");
-    try {
-      const sleeperPlayers = await fetchSleeperPlayers();
-      setPlayers((current) => enrichPlayersWithSleeper(current, sleeperPlayers));
-      setSleeperLastUpdatedAt(Date.now());
-      setSleeperRefreshState("idle");
-    } catch (error) {
-      setSleeperRefreshState("error");
-      setSleeperRefreshError(error instanceof Error ? error.message : "Unable to refresh player data");
-    }
-  }, [players, sleeperLastUpdatedAt]);
 
   function draftPlayer(id) {
     setPlayers((current) => setPlayerDrafted(current, id, true));
@@ -95,6 +70,10 @@ export default function App() {
 
   function toggleStar(id) {
     setPlayers((current) => togglePlayerStar(current, id));
+  }
+
+  function updateTargetRound(id, targetRound) {
+    setPlayers((current) => setPlayerTargetRound(current, id, targetRound));
   }
 
   function undoLast() {
@@ -197,7 +176,6 @@ export default function App() {
     setImportText("");
     setImportOpen(false);
     setEditMode(false);
-    void refreshSleeperData({ playersToCheck: importedPlayers });
   }
 
   function importFromText() {
@@ -221,26 +199,6 @@ export default function App() {
     readFile(event, (text) => {
       importPlayers(parsePlayersCSV(text));
       if (fileInputRef.current) fileInputRef.current.value = "";
-    });
-  }
-
-  function onAdpFileChange(event) {
-    readFile(event, (text) => {
-      const imported = parseAdpCSV(text);
-      if (!Object.keys(imported).length) return;
-      setAdp((current) => ({ ...current, ...imported }));
-      alert("ADP data imported.");
-      if (adpFileRef.current) adpFileRef.current.value = "";
-    });
-  }
-
-  function onStatsFileChange(event) {
-    readFile(event, (text) => {
-      const imported = parseStatsCSV(text);
-      if (!Object.keys(imported).length) return;
-      setStats((current) => mergeStatsData(current, imported));
-      alert("Stats imported.");
-      if (statsFileRef.current) statsFileRef.current.value = "";
     });
   }
 
@@ -272,7 +230,7 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-2" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-2 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(315px,330px)_minmax(0,1fr)] gap-2 items-start">
           <RankingsPanel
             dark={dark}
             editMode={editMode}
@@ -289,8 +247,8 @@ export default function App() {
             itemRefs={itemRefs}
             onPlayerPointerDown={startDrag}
             onDraft={draftPlayer}
-            onSelect={setSelectedId}
             onToggleStar={toggleStar}
+            onTargetRoundChange={updateTargetRound}
           />
           <DraftBoard
             dark={dark}
@@ -303,17 +261,6 @@ export default function App() {
             players={players}
             onReset={resetDraft}
             onUndo={undoLast}
-            selectedPlayer={selectedPlayer}
-            selectedPositionRank={selectedPlayer ? allPositionRanks[selectedPlayer.id] : undefined}
-            adp={adp}
-            stats={stats}
-            openAdp={() => adpFileRef.current?.click()}
-            openStats={() => statsFileRef.current?.click()}
-            statsFileRef={statsFileRef}
-            adpFileRef={adpFileRef}
-            onRefreshPlayerData={() => refreshSleeperData({ force: true })}
-            sleeperRefreshState={sleeperRefreshState}
-            sleeperRefreshError={sleeperRefreshError}
           />
         </div>
       </div>
@@ -326,14 +273,8 @@ export default function App() {
           onClose={() => setImportOpen(false)}
           onImportText={importFromText}
           onOpenPlayersFile={() => fileInputRef.current?.click()}
-          onOpenAdpFile={() => adpFileRef.current?.click()}
-          onOpenStatsFile={() => statsFileRef.current?.click()}
           fileInputRef={fileInputRef}
-          adpFileRef={adpFileRef}
-          statsFileRef={statsFileRef}
           onPlayersFileChange={onPlayersFileChange}
-          onAdpFileChange={onAdpFileChange}
-          onStatsFileChange={onStatsFileChange}
         />
       )}
 

@@ -1,5 +1,6 @@
 import { positionClass } from "../data/draftDefaults.js";
-import { PlayerDetails } from "./PlayerDetails.jsx";
+import { positionRankMap, playersByRank } from "../lib/players.js";
+import { DraftAssistance } from "./DraftAssistance.jsx";
 import { Button } from "./ui.jsx";
 
 export function DraftBoard({
@@ -13,19 +14,9 @@ export function DraftBoard({
   players,
   onReset,
   onUndo,
-  selectedPlayer,
-  selectedPositionRank,
-  adp,
-  stats,
-  openAdp,
-  openStats,
-  statsFileRef,
-  adpFileRef,
-  onRefreshPlayerData,
-  sleeperRefreshState,
-  sleeperRefreshError,
 }) {
   const columns = `repeat(${settings.numTeams}, minmax(0, 1fr))`;
+  const positionRanks = positionRankMap(playersByRank(players));
 
   return (
     <section className={`${dark ? "bg-zinc-700" : "bg-white"} min-w-0 rounded-2xl shadow p-1.5`}>
@@ -138,20 +129,7 @@ export function DraftBoard({
         </div>
       </div>
 
-      <PlayerDetails
-        dark={dark}
-        selected={selectedPlayer}
-        positionRank={selectedPositionRank}
-        adp={adp}
-        stats={stats}
-        openAdp={openAdp}
-        openStats={openStats}
-        statsFileRef={statsFileRef}
-        adpFileRef={adpFileRef}
-        onRefreshPlayerData={onRefreshPlayerData}
-        sleeperRefreshState={sleeperRefreshState}
-        sleeperRefreshError={sleeperRefreshError}
-      />
+      <DraftAssistance dark={dark} players={players} history={history} settings={settings} positionRanks={positionRanks} />
     </section>
   );
 }

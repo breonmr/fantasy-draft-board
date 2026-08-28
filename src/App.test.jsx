@@ -1,15 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import { STORAGE_KEY } from "./data/draftDefaults.js";
 import App from "./App.jsx";
 
 describe("Fantasy Draft Board", () => {
   beforeEach(() => {
     localStorage.clear();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
   });
 
   it("renders the board with its starter rankings", () => {
@@ -64,48 +60,15 @@ describe("Fantasy Draft Board", () => {
     const runningBackFilter = screen.getByRole("button", { name: "RB" });
     expect(allFilter).toHaveClass("bg-teal-400");
     expect(runningBackFilter).toHaveClass("bg-slate-800");
-    expect(screen.getByRole("button", { name: "DEF" })).toBeInTheDocument();
-    expect(screen.getByText("FLEX")).not.toHaveClass("truncate");
-    expect(screen.getByText("DEF")).not.toHaveClass("truncate");
+    ["ALL", "QB", "RB", "WR", "TE", "FLEX", "K", "DEF"].forEach((label) => {
+      const filter = screen.getByRole("button", { name: label });
+      expect(filter).toBeInTheDocument();
+      expect(filter).not.toHaveClass("truncate");
+    });
 
     fireEvent.click(runningBackFilter);
     expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(4);
     expect(runningBackFilter).toHaveClass("bg-teal-400");
-  });
-
-  it("manually refreshes selected player metadata without changing rankings", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        "100": {
-          player_id: "100",
-          first_name: "Ja'Marr",
-          last_name: "Chase",
-          position: "WR",
-          team: "CIN",
-          age: 26,
-          height: "6'0\"",
-          college: "LSU",
-          active: true,
-        },
-      }),
-    }));
-    const { container } = render(<App />);
-    fireEvent.click(container.querySelector("li[data-id]"));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh Player Data" }));
-
-    await waitFor(() => expect(screen.getByText("Age 26")).toBeInTheDocument());
-    expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(10);
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0].sleeper.playerId).toBe("100");
-  });
-
-  it("keeps the board usable when a metadata refresh fails", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Refresh Player Data" }));
-
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Player data refresh failed"));
-    expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(10);
   });
 
   it("clears a player search with the clear control", () => {
@@ -123,36 +86,33 @@ describe("Fantasy Draft Board", () => {
     expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(10);
   });
 
-  it("opens player details when an available-player card is clicked", () => {
-    const { container } = render(<App />);
+  it("edits, persists, and clears a player target round", () => {
+    const view = render(<App />);
 
-    fireEvent.click(container.querySelector("li[data-id]"));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase Ja'Marr Chase target round" }));
 
-    expect(screen.getByRole("button", { name: "Expand player details" })).toBeInTheDocument();
-    expect(screen.getByText("Overall #1")).toBeInTheDocument();
-    expect(screen.getByText("☆ Not starred")).toBeInTheDocument();
+    expect(screen.getAllByTitle("Target round 1")).toHaveLength(2);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0].targetRound).toBe(1);
+
+    view.unmount();
+    render(<App />);
+    expect(screen.getAllByTitle("Target round 1")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear Ja'Marr Chase target round" }));
+    expect(screen.queryByTitle("Target round 1")).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0].targetRound).toBeNull();
   });
 
-  it("opens and closes expanded player details without losing the selected player", () => {
-    const { container } = render(<App />);
-    fireEvent.click(container.querySelector("li[data-id]"));
-    fireEvent.click(screen.getByRole("button", { name: "Expand player details" }));
-
-    expect(screen.getByRole("dialog", { name: "Expanded player details" })).toBeInTheDocument();
-    expect(screen.getByText("Recent performance")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Close expanded player details" }));
-    expect(screen.queryByRole("dialog", { name: "Expanded player details" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Expand player details" })).toBeInTheDocument();
-  });
-
-  it("toggles a player watchlist star without opening their details", () => {
+  it("removes drafted favorites from Targets", () => {
     render(<App />);
 
-    const watchlistButton = screen.getByRole("button", { name: "Add Ja'Marr Chase to watchlist" });
-    fireEvent.click(watchlistButton);
+    fireEvent.click(screen.getByRole("button", { name: "Add Ja'Marr Chase to watchlist" }));
+    const targets = screen.getByRole("heading", { name: "Targets" }).closest("section");
+    expect(within(targets).getByText("Ja'Marr Chase")).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: "Remove Ja'Marr Chase from watchlist" })).toBeInTheDocument();
-    expect(screen.queryByText("Player profile")).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Draft" })[0]);
+    expect(within(targets).queryByText("Ja'Marr Chase")).not.toBeInTheDocument();
   });
 });

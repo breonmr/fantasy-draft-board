@@ -1,6 +1,18 @@
 import { Fragment } from "react";
 import { POSITION_FILTERS, positionClass } from "../data/draftDefaults.js";
+import { TargetRoundBadge } from "./TargetRoundBadge.jsx";
 import { Button, Input } from "./ui.jsx";
+
+const FILTER_SEGMENT_WIDTHS = {
+  ALL: "flex-[1.1_1_0%]",
+  QB: "flex-[0.8_1_0%]",
+  RB: "flex-[0.8_1_0%]",
+  WR: "flex-[0.9_1_0%]",
+  TE: "flex-[0.9_1_0%]",
+  FLEX: "flex-[1.6_1_0%]",
+  K: "flex-[0.6_1_0%]",
+  DEF: "flex-[1.15_1_0%]",
+};
 
 function PlayerRow({
   player,
@@ -11,9 +23,15 @@ function PlayerRow({
   itemRefs,
   onPointerDown,
   onDraft,
-  onSelect,
   onToggleStar,
+  onTargetRoundChange,
 }) {
+  const changeTargetRound = (event, nextRound) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onTargetRoundChange(player.id, nextRound);
+  };
+
   return (
     <li
       data-id={player.id}
@@ -23,27 +41,16 @@ function PlayerRow({
       className={`rounded-md border ${
         dark ? "border-zinc-600 bg-zinc-700" : "border-gray-300 bg-white"
       } flex items-center justify-between gap-1.5 px-1.5 py-1.5 ${
-        editMode ? "cursor-grab" : "cursor-pointer hover:border-blue-400 hover:shadow-sm"
+        editMode ? "cursor-grab" : "hover:border-blue-400 hover:shadow-sm"
       } select-none ${beingDragged ? "opacity-40" : ""}`}
       onPointerDown={onPointerDown}
-      onClick={() => {
-        if (!editMode) onSelect(player.id);
-      }}
-      title={editMode ? "Drag to reorder" : "Click card for details; click Draft to draft"}
+      title={editMode ? "Drag to reorder" : "Draft, favorite, or set a target round in Edit mode"}
     >
+      <span data-overall-rank={player.id} className="w-5 shrink-0 text-right text-[9px] font-medium opacity-60 tabular-nums">{(player.rank ?? 0) + 1}</span>
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
         {!editMode ? (
           <div className="min-w-0 flex-1">
-            <button
-              className="block w-full text-left font-semibold text-[12px] hover:underline truncate"
-              onClick={(event) => {
-                event.stopPropagation();
-                onSelect(player.id);
-              }}
-              title="Show details"
-            >
-              {player.name}
-            </button>
+            <span className="block w-full text-left font-semibold text-[12px] truncate">{player.name}</span>
             <div className="flex items-center gap-1 text-[10px] leading-tight opacity-60">
               <span
                 className={`w-2 h-2 shrink-0 rounded-full ${positionClass(player.pos)}`}
@@ -66,11 +73,20 @@ function PlayerRow({
             </div>
           </div>
         )}
-        <span className="w-4 shrink-0 text-right text-[9px] opacity-60 tabular-nums">{(player.rank ?? 0) + 1}</span>
       </div>
 
       {!editMode && (
         <div className="shrink-0 flex items-center gap-1">
+          <Button
+            className="bg-blue-900 text-white px-2 py-1 text-[11px]"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDraft(player.id);
+            }}
+          >
+            Draft
+          </Button>
+          <TargetRoundBadge round={player.targetRound} />
           <button
             type="button"
             className={`w-6 h-6 rounded-md text-base leading-none hover:bg-amber-100 ${
@@ -85,23 +101,42 @@ function PlayerRow({
           >
             {player.starred ? "★" : "☆"}
           </button>
-          {player.target > 0 && (
-            <span
-              className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[9px] font-bold bg-amber-300 text-amber-900"
-              title={`Target ${player.target}`}
-            >
-              ★ {player.target}
-            </span>
-          )}
-          <Button
-            className="bg-blue-900 text-white px-2 py-1 text-[11px]"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDraft(player.id);
-            }}
+        </div>
+      )}
+      {editMode && (
+        <div className="flex shrink-0 items-center gap-0.5" onPointerDown={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            className="h-5 w-5 rounded bg-zinc-500 text-xs leading-none hover:bg-zinc-400 disabled:opacity-35"
+            onClick={(event) => changeTargetRound(event, player.targetRound ? player.targetRound - 1 : null)}
+            disabled={!player.targetRound || player.targetRound <= 1}
+            aria-label={`Decrease ${player.name} target round`}
+            title="Decrease target round"
           >
-            Draft
-          </Button>
+            −
+          </button>
+          <TargetRoundBadge round={player.targetRound} />
+          <button
+            type="button"
+            className="h-5 w-5 rounded bg-zinc-500 text-xs leading-none hover:bg-zinc-400 disabled:opacity-35"
+            onClick={(event) => changeTargetRound(event, Math.min(16, (player.targetRound || 0) + 1))}
+            disabled={player.targetRound >= 16}
+            aria-label={`Increase ${player.name} target round`}
+            title="Increase target round"
+          >
+            +
+          </button>
+          {player.targetRound && (
+            <button
+              type="button"
+              className="h-5 w-5 rounded text-[11px] leading-none opacity-65 hover:bg-rose-500 hover:text-white"
+              onClick={(event) => changeTargetRound(event, null)}
+              aria-label={`Clear ${player.name} target round`}
+              title="Clear target round"
+            >
+              ×
+            </button>
+          )}
         </div>
       )}
     </li>
@@ -124,8 +159,8 @@ export function RankingsPanel({
   itemRefs,
   onPlayerPointerDown,
   onDraft,
-  onSelect,
   onToggleStar,
+  onTargetRoundChange,
 }) {
   return (
     <section
@@ -151,15 +186,16 @@ export function RankingsPanel({
         </div>
       </div>
 
-      <div className="flex w-full overflow-hidden rounded-2xl border border-slate-600 mb-1.5">
+      <div className="flex w-full overflow-hidden rounded-xl border border-slate-600 bg-slate-800 mb-1.5" aria-label="Position filters">
         {POSITION_FILTERS.map((tab, index) => {
           const active = posTab === tab.value;
           return (
             <Button
               key={tab.value}
-              className={`flex h-8 flex-[1_1_auto] items-center justify-center rounded-none px-1 py-0 shadow-none text-[9px] font-medium leading-none ${
+              className={`min-w-0 ${FILTER_SEGMENT_WIDTHS[tab.label]} flex h-8 items-center justify-center rounded-none px-1 py-0 shadow-none text-[10px] font-medium leading-none ${
                 index < POSITION_FILTERS.length - 1 ? "border-r border-slate-600" : ""
               } ${active ? "bg-teal-400 text-slate-950" : "bg-slate-800 text-slate-200 hover:bg-slate-700"}`}
+              style={{ paddingInline: "4px", paddingBlock: 0 }}
               onClick={() => onPosTabChange(tab.value)}
             >
               <span className="whitespace-nowrap font-medium leading-none">{tab.label}</span>
@@ -207,8 +243,8 @@ export function RankingsPanel({
               itemRefs={itemRefs}
               onPointerDown={(event) => onPlayerPointerDown(event, player.id, index)}
               onDraft={onDraft}
-              onSelect={onSelect}
               onToggleStar={onToggleStar}
+              onTargetRoundChange={onTargetRoundChange}
             />
           </Fragment>
         ))}

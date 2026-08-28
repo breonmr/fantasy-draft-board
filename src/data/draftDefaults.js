@@ -43,3 +43,26 @@ export function positionClass(pos) {
   if (normalizedPos === "K") return "bg-yellow-300 text-black";
   return "bg-gray-300 text-black";
 }
+
+const TARGET_ROUND_CLASSES = {
+  1: "bg-rose-500 text-white",
+  2: "bg-orange-500 text-white",
+  3: "bg-amber-400 text-amber-950",
+  4: "bg-lime-400 text-lime-950",
+  5: "bg-green-500 text-white",
+  6: "bg-emerald-500 text-white",
+  7: "bg-teal-500 text-white",
+  8: "bg-cyan-500 text-cyan-950",
+  9: "bg-sky-500 text-white",
+  10: "bg-blue-500 text-white",
+  11: "bg-indigo-500 text-white",
+  12: "bg-violet-500 text-white",
+  13: "bg-purple-500 text-white",
+  14: "bg-fuchsia-500 text-white",
+  15: "bg-pink-500 text-white",
+  16: "bg-slate-600 text-white",
+};
+
+export function targetRoundClass(round) {
+  return TARGET_ROUND_CLASSES[round] || "bg-slate-500 text-white";
+}

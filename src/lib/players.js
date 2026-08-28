@@ -1,5 +1,10 @@
 export const createId = () => Math.random().toString(36).slice(2, 9);
 
+export function normalizeTargetRound(value) {
+  const round = Number(value);
+  return Number.isInteger(round) && round >= 1 && round <= 16 ? round : null;
+}
+
 export function normalizePlayerName(value) {
   return (value || "")
     .toLowerCase()
@@ -16,6 +21,7 @@ export function createPlayers(rows) {
     team: row.team,
     tier: row.tier || 1,
     target: row.target || 0,
+    targetRound: normalizeTargetRound(row.targetRound),
     drafted: false,
     rank: index,
   }));
@@ -90,6 +96,12 @@ export function filterAvailablePlayers(players, position, search) {
 
 export function togglePlayerStar(players, id) {
   return players.map((player) => (player.id === id ? { ...player, starred: !player.starred } : player));
+}
+
+export function setPlayerTargetRound(players, id, targetRound) {
+  return players.map((player) => (
+    player.id === id ? { ...player, targetRound: normalizeTargetRound(targetRound) } : player
+  ));
 }
 
 export function mergeStatsData(current, imported) {
