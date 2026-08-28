@@ -11,6 +11,7 @@ import {
   createPlayers,
   filterAvailablePlayers,
   positionRankMap,
+  setPlayerTier,
   setPlayerTargetRound,
   togglePlayerStar,
 } from "./lib/players.js";
@@ -74,6 +75,10 @@ export default function App() {
 
   function updateTargetRound(id, targetRound) {
     setPlayers((current) => setPlayerTargetRound(current, id, targetRound));
+  }
+
+  function updateTier(id, tier) {
+    setPlayers((current) => setPlayerTier(current, id, tier));
   }
 
   function undoLast() {
@@ -249,6 +254,7 @@ export default function App() {
             onDraft={draftPlayer}
             onToggleStar={toggleStar}
             onTargetRoundChange={updateTargetRound}
+            onTierChange={updateTier}
           />
           <DraftBoard
             dark={dark}

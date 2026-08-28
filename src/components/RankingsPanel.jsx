@@ -25,11 +25,18 @@ function PlayerRow({
   onDraft,
   onToggleStar,
   onTargetRoundChange,
+  onTierChange,
 }) {
   const changeTargetRound = (event, nextRound) => {
     event.preventDefault();
     event.stopPropagation();
     onTargetRoundChange(player.id, nextRound);
+  };
+
+  const changeTier = (event, nextTier) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onTierChange(player.id, nextTier);
   };
 
   return (
@@ -107,39 +114,74 @@ function PlayerRow({
         </div>
       )}
       {editMode && (
-        <div className="flex shrink-0 items-center gap-0.5" onPointerDown={(event) => event.stopPropagation()}>
-          <button
-            type="button"
-            className="h-5 w-5 rounded bg-zinc-500 text-xs leading-none hover:bg-zinc-400 disabled:opacity-35"
-            onClick={(event) => changeTargetRound(event, player.targetRound ? player.targetRound - 1 : null)}
-            disabled={!player.targetRound || player.targetRound <= 1}
-            aria-label={`Decrease ${player.name} target round`}
-            title="Decrease target round"
-          >
-            −
-          </button>
-          <TargetRoundBadge round={player.targetRound} />
-          <button
-            type="button"
-            className="h-5 w-5 rounded bg-zinc-500 text-xs leading-none hover:bg-zinc-400 disabled:opacity-35"
-            onClick={(event) => changeTargetRound(event, Math.min(16, (player.targetRound || 0) + 1))}
-            disabled={player.targetRound >= 16}
-            aria-label={`Increase ${player.name} target round`}
-            title="Increase target round"
-          >
-            +
-          </button>
-          {player.targetRound && (
+        <div className="flex shrink-0 items-center gap-1" onPointerDown={(event) => event.stopPropagation()}>
+          <div className="grid w-[66px] grid-cols-[20px_22px_20px] items-center gap-0.5" aria-label={`${player.name} tier controls`}>
             <button
               type="button"
-              className="h-5 w-5 rounded text-[11px] leading-none opacity-65 hover:bg-rose-500 hover:text-white"
+              className="h-5 w-5 rounded bg-slate-500 text-xs leading-none hover:bg-slate-400 disabled:opacity-35"
+              onClick={(event) => changeTier(event, player.tier ? player.tier - 1 : null)}
+              disabled={!player.tier || player.tier <= 1}
+              aria-label={`Decrease ${player.name} tier`}
+              title="Decrease tier"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="h-5 min-w-0 rounded bg-slate-600 px-0.5 text-[9px] font-semibold tabular-nums text-white hover:bg-slate-500 disabled:opacity-55"
+              onClick={(event) => changeTier(event, player.tier ? null : 1)}
+              aria-label={player.tier ? `Clear ${player.name} tier` : `Set ${player.name} tier 1`}
+              title={player.tier ? "Clear tier" : "Set tier 1"}
+            >
+              {player.tier ? `T${player.tier}` : "T—"}
+            </button>
+            <button
+              type="button"
+              className="h-5 w-5 rounded bg-slate-500 text-xs leading-none hover:bg-slate-400"
+              onClick={(event) => changeTier(event, (player.tier || 0) + 1)}
+              aria-label={`Increase ${player.name} tier`}
+              title="Increase tier"
+            >
+              +
+            </button>
+          </div>
+          <div className="grid w-[86px] grid-cols-4 items-center gap-0.5" aria-label={`${player.name} target round controls`}>
+            <button
+              type="button"
+              className={`h-5 w-5 rounded text-[11px] leading-none opacity-65 hover:bg-rose-500 hover:text-white ${player.targetRound ? "" : "invisible"}`}
               onClick={(event) => changeTargetRound(event, null)}
               aria-label={`Clear ${player.name} target round`}
               title="Clear target round"
+              tabIndex={player.targetRound ? 0 : -1}
             >
               ×
             </button>
-          )}
+            <button
+              type="button"
+              className="h-5 w-5 rounded bg-zinc-500 text-xs leading-none hover:bg-zinc-400 disabled:opacity-35"
+              onClick={(event) => changeTargetRound(event, player.targetRound ? player.targetRound - 1 : null)}
+              disabled={!player.targetRound || player.targetRound <= 1}
+              aria-label={`Decrease ${player.name} target round`}
+              title="Decrease target round"
+              data-target-control="decrease"
+            >
+              −
+            </button>
+            <span className="flex h-5 w-5 items-center justify-center">
+              <TargetRoundBadge round={player.targetRound} />
+            </span>
+            <button
+              type="button"
+              className="h-5 w-5 rounded bg-zinc-500 text-xs leading-none hover:bg-zinc-400 disabled:opacity-35"
+              onClick={(event) => changeTargetRound(event, Math.min(16, (player.targetRound || 0) + 1))}
+              disabled={player.targetRound >= 16}
+              aria-label={`Increase ${player.name} target round`}
+              title="Increase target round"
+              data-target-control="increase"
+            >
+              +
+            </button>
+          </div>
         </div>
       )}
     </li>
@@ -164,6 +206,7 @@ export function RankingsPanel({
   onDraft,
   onToggleStar,
   onTargetRoundChange,
+  onTierChange,
 }) {
   return (
     <section
@@ -234,6 +277,14 @@ export function RankingsPanel({
       <ul className="space-y-1 flex-1 min-h-0 overflow-y-auto overscroll-contain pr-0.5">
         {players.map((player, index) => (
           <Fragment key={player.id}>
+            {player.tier && player.tier !== players[index - 1]?.tier && (
+              <li
+                data-tier-divider={player.tier}
+                className={`rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-600 ${dark ? "bg-slate-800 text-slate-300" : ""}`}
+              >
+                Tier {player.tier}
+              </li>
+            )}
             {insertIndex === index && editMode && (
               <div className={`h-[3px] ${dark ? "bg-zinc-200" : "bg-gray-800"} rounded my-0.5`} />
             )}
@@ -248,6 +299,7 @@ export function RankingsPanel({
               onDraft={onDraft}
               onToggleStar={onToggleStar}
               onTargetRoundChange={onTargetRoundChange}
+              onTierChange={onTierChange}
             />
           </Fragment>
         ))}

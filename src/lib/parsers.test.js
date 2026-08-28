@@ -11,7 +11,6 @@ describe("player import parsing", () => {
       target: 3,
     });
     expect(parseImportLine("Josh Allen QB BUF")).toEqual({
-      tier: 1,
       pos: "QB",
       team: "BUF",
       name: "Josh Allen",
@@ -27,9 +26,20 @@ describe("player import parsing", () => {
     ]);
   });
 
+  it("keeps tiers optional and ignores blank or invalid tier values", () => {
+    expect(parsePlayersCSV("Name,Position,Team\nJosh Allen,QB,BUF")).toEqual([
+      { pos: "QB", team: "BUF", name: "Josh Allen", target: 0 },
+    ]);
+    expect(parsePlayersCSV("Name,Position,Team,TIER\nA,QB,BUF,\nB,RB,DET,0\nC,WR,MIN,three")).toEqual([
+      { pos: "QB", team: "BUF", name: "A", target: 0 },
+      { pos: "RB", team: "DET", name: "B", target: 0 },
+      { pos: "WR", team: "MIN", name: "C", target: 0 },
+    ]);
+  });
+
   it("keeps an optional static ADP column when present", () => {
     expect(parsePlayersCSV("Name,Position,Team,ADP\nAmon-Ra St. Brown,WR,DET,14.2")).toEqual([
-      { tier: 1, pos: "WR", team: "DET", name: "Amon-Ra St. Brown", target: 0, adp: 14.2 },
+      { pos: "WR", team: "DET", name: "Amon-Ra St. Brown", target: 0, adp: 14.2 },
     ]);
   });
 

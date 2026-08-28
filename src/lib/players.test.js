@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterAvailablePlayers, positionFilterCount, setPlayerTargetRound, togglePlayerStar } from "./players.js";
+import { createPlayers, filterAvailablePlayers, positionFilterCount, setPlayerTargetRound, setPlayerTier, togglePlayerStar } from "./players.js";
 
 const players = [
   { id: "qb", name: "Quarterback", pos: "QB", drafted: false, rank: 0 },
@@ -40,5 +40,18 @@ describe("available-player helpers", () => {
 
     expect(setPlayerTargetRound(targeted, "wr", null).find((player) => player.id === "wr").targetRound).toBeNull();
     expect(setPlayerTargetRound(targeted, "wr", 17).find((player) => player.id === "wr").targetRound).toBeNull();
+  });
+
+  it("keeps tier membership optional and explicitly editable", () => {
+    const created = createPlayers([
+      { name: "Tiered", pos: "RB", team: "DET", tier: "2" },
+      { name: "Untiered", pos: "WR", team: "MIN" },
+      { name: "Invalid", pos: "QB", team: "BUF", tier: 0 },
+    ]);
+    expect(created.map((player) => player.tier)).toEqual([2, undefined, undefined]);
+
+    const tiered = setPlayerTier(players, "wr", 3);
+    expect(tiered.find((player) => player.id === "wr").tier).toBe(3);
+    expect(setPlayerTier(tiered, "wr", null).find((player) => player.id === "wr").tier).toBeUndefined();
   });
 });

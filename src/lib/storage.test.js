@@ -25,7 +25,7 @@ describe("draft storage", () => {
   it("round-trips the current persisted schema", () => {
     const storage = createStorage();
     const state = {
-      players: [{ id: "a", name: "A", drafted: true, rank: 0, starred: true, targetRound: 7 }],
+      players: [{ id: "a", name: "A", drafted: true, rank: 0, starred: true, targetRound: 7, tier: 3 }],
       history: ["a"],
       settings: { numTeams: 10, numRounds: 15, teamNames: ["One"], myTeam: 0 },
       adp: { a: { yahoo: 1 } },

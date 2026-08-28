@@ -1,16 +1,16 @@
-import { normalizePlayerName } from "./players.js";
+import { normalizePlayerName, normalizeTier } from "./players.js";
 
 export function parseImportLine(line) {
   const parts = line.split(/[,|\t]/).map((part) => part.trim()).filter(Boolean);
   if (parts.length >= 4 && /^\d+$/.test(parts[0])) {
-    const tier = Math.max(1, parseInt(parts[0], 10) || 1);
+    const tier = normalizeTier(parts[0]);
     const positionToken = (parts[1] || "").toUpperCase();
     const positionMatch = positionToken.match(/[A-Z]+/);
     const pos = positionMatch ? positionMatch[0] : "";
     const team = (parts[2] || "").toUpperCase();
     const name = parts.slice(3, 4).join(" ") || parts[3];
     const target = parts.length >= 5 ? Math.max(0, parseInt(parts[4], 10) || 0) : 0;
-    return { tier, pos, team, name, target };
+    return { ...(tier ? { tier } : {}), pos, team, name, target };
   }
 
   let name = line.trim();
@@ -22,7 +22,7 @@ export function parseImportLine(line) {
     pos = fallback[2].toUpperCase();
     team = fallback[3].toUpperCase();
   }
-  return { tier: 1, pos, team, name, target: 0 };
+  return { pos, team, name, target: 0 };
 }
 
 export function parsePlayersCSV(text) {
@@ -40,7 +40,7 @@ export function parsePlayersCSV(text) {
 
   return lines.slice(1).map((line) => {
     const parts = line.split(",").map((part) => part.trim());
-    const tier = tierIndex >= 0 ? parseInt(parts[tierIndex] || "1", 10) || 1 : 1;
+    const tier = tierIndex >= 0 ? normalizeTier(parts[tierIndex]) : null;
     const positionToken = positionIndex >= 0 ? (parts[positionIndex] || "").toUpperCase() : "";
     const positionMatch = positionToken.match(/[A-Z]+/);
     const pos = positionMatch ? positionMatch[0] : "";
@@ -48,7 +48,14 @@ export function parsePlayersCSV(text) {
     const name = nameIndex >= 0 ? parts[nameIndex] || "" : line;
     const target = targetIndex >= 0 ? Math.max(0, parseInt(parts[targetIndex] || "0", 10) || 0) : 0;
     const adp = adpIndex >= 0 ? parseFloat(parts[adpIndex]) : NaN;
-    return { tier, pos, team, name, target, ...(Number.isFinite(adp) ? { adp } : {}) };
+    return {
+      ...(tier ? { tier } : {}),
+      pos,
+      team,
+      name,
+      target,
+      ...(Number.isFinite(adp) ? { adp } : {}),
+    };
   });
 }
 

@@ -4,6 +4,7 @@ import {
   estimateSurvivalRisk,
   nextPickContext,
   positionDemand,
+  comparableDepth,
   recommendAvailablePlayers,
 } from "./recommendations.js";
 
@@ -66,6 +67,32 @@ describe("survival risk and recommendation scoring", () => {
     expect(risk.comparableCount).toBe(6);
   });
 
+  it("uses only available same-position, same-tier players as tier comparables", () => {
+    const tiered = { id: "rb-one", pos: "RB", rank: 1, tier: 2, drafted: false };
+    const available = [
+      tiered,
+      { id: "rb-two", pos: "RB", rank: 2, tier: 2, drafted: false },
+      { id: "rb-other-tier", pos: "RB", rank: 3, tier: 3, drafted: false },
+      { id: "wr-same-tier", pos: "WR", rank: 4, tier: 2, drafted: false },
+      { id: "rb-drafted", pos: "RB", rank: 5, tier: 2, drafted: true },
+    ];
+
+    expect(comparableDepth(tiered, available).map((player) => player.id)).toEqual(["rb-two"]);
+    expect(estimateSurvivalRisk(tiered, available, {
+      nextPick: 6,
+      interveningPicks: [],
+      totalDemand: { QB: 0, RB: 0, WR: 0, TE: 0 },
+      teamDemands: [],
+    }).comparableCount).toBe(1);
+  });
+
+  it("uses the rank-window comparable fallback when a player has no tier", () => {
+    const untiered = { id: "wr-one", pos: "WR", rank: 1, drafted: false };
+    const available = [untiered, { id: "wr-two", pos: "WR", rank: 4, drafted: false }, { id: "wr-far", pos: "WR", rank: 30, drafted: false }];
+
+    expect(comparableDepth(untiered, available).map((player) => player.id)).toEqual(["wr-one", "wr-two"]);
+  });
+
   it("detects a recent position run without treating every draft as one", () => {
     const players = [
       { id: "wr-1", pos: "WR" }, { id: "wr-2", pos: "WR" }, { id: "wr-3", pos: "WR" }, { id: "rb", pos: "RB" },
@@ -109,6 +136,22 @@ describe("survival risk and recommendation scoring", () => {
 
     const recommendations = recommendAvailablePlayers(players, history, twoTeamSettings);
     expect(recommendations[0].player.id).toBe("top-te");
+  });
+
+  it("uses a tier cliff to break an otherwise similar recommendation tie", () => {
+    const players = [
+      { id: "last-rb", name: "Last RB", pos: "RB", rank: 5, tier: 2, drafted: false },
+      { id: "next-rb", name: "Next RB", pos: "RB", rank: 9, tier: 3, drafted: false },
+      { id: "deep-wr", name: "Deep WR", pos: "WR", rank: 5, tier: 1, drafted: false },
+      { id: "wr-two", pos: "WR", rank: 6, tier: 1, drafted: false },
+      { id: "wr-three", pos: "WR", rank: 7, tier: 1, drafted: false },
+      { id: "wr-four", pos: "WR", rank: 8, tier: 1, drafted: false },
+      { id: "wr-five", pos: "WR", rank: 10, tier: 1, drafted: false },
+    ];
+
+    const recommendations = recommendAvailablePlayers(players, [], twoTeamSettings);
+    expect(recommendations[0].player.id).toBe("last-rb");
+    expect(recommendations[0]).toMatchObject({ reason: "Last RB in Tier 2", detail: "Tier cliff ahead" });
   });
 
   it("works without ADP and treats an earlier optional ADP as additional risk", () => {

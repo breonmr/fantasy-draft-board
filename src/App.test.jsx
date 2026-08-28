@@ -73,6 +73,21 @@ describe("Fantasy Draft Board", () => {
     expect(runningBackFilter).toHaveClass("bg-teal-400");
   });
 
+  it("renders explicit tier dividers in normal and edit modes", () => {
+    render(<App />);
+
+    expect(screen.getByText("Tier 1")).toBeInTheDocument();
+    expect(screen.getByText("Tier 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit", exact: true }));
+    expect(screen.getByText("Tier 1")).toBeInTheDocument();
+    expect(screen.getByText("Tier 2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Increase Jonathan Taylor tier" }));
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players.find((player) => player.name === "Jonathan Taylor").tier).toBe(3);
+    fireEvent.click(screen.getByRole("button", { name: "Clear Jonathan Taylor tier" }));
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players.find((player) => player.name === "Jonathan Taylor").tier).toBeUndefined();
+  });
+
   it("clears a player search with the clear control", () => {
     render(<App />);
 
@@ -105,6 +120,25 @@ describe("Fantasy Draft Board", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear Ja'Marr Chase target round" }));
     expect(screen.queryByTitle("Target round 1")).not.toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0].targetRound).toBeNull();
+  });
+
+  it("keeps target-round controls in fixed slots while the round changes", () => {
+    const { container } = render(<App />);
+    const firstRow = container.querySelector("li[data-id]");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit", exact: true }));
+    const controls = within(firstRow).getByLabelText("Ja'Marr Chase target round controls");
+    const increase = within(firstRow).getByRole("button", { name: "Increase Ja'Marr Chase target round" });
+    expect(controls).toHaveClass("grid-cols-4");
+    expect(controls.children[3]).toBe(increase);
+
+    fireEvent.click(increase);
+    expect(controls.children[3]).toBe(within(firstRow).getByRole("button", { name: "Increase Ja'Marr Chase target round" }));
+    expect(controls.children[0]).toBe(within(firstRow).getByRole("button", { name: "Clear Ja'Marr Chase target round" }));
+
+    fireEvent.click(within(firstRow).getByRole("button", { name: "Clear Ja'Marr Chase target round" }));
+    expect(controls.children[3]).toBe(within(firstRow).getByRole("button", { name: "Increase Ja'Marr Chase target round" }));
+    expect(controls.children[0]).toHaveClass("invisible");
   });
 
   it("uses one target-or-favorite control immediately before Draft", () => {

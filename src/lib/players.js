@@ -5,6 +5,11 @@ export function normalizeTargetRound(value) {
   return Number.isInteger(round) && round >= 1 && round <= 16 ? round : null;
 }
 
+export function normalizeTier(value) {
+  const tier = Number(value);
+  return Number.isInteger(tier) && tier >= 1 ? tier : null;
+}
+
 export function normalizePlayerName(value) {
   return (value || "")
     .toLowerCase()
@@ -14,18 +19,21 @@ export function normalizePlayerName(value) {
 }
 
 export function createPlayers(rows) {
-  return rows.map((row, index) => ({
-    id: createId(),
-    name: row.name,
-    pos: row.pos,
-    team: row.team,
-    tier: row.tier || 1,
-    target: row.target || 0,
-    targetRound: normalizeTargetRound(row.targetRound),
-    ...(Number.isFinite(row.adp) ? { adp: row.adp } : {}),
-    drafted: false,
-    rank: index,
-  }));
+  return rows.map((row, index) => {
+    const tier = normalizeTier(row.tier);
+    return {
+      id: createId(),
+      name: row.name,
+      pos: row.pos,
+      team: row.team,
+      ...(tier ? { tier } : {}),
+      target: row.target || 0,
+      targetRound: normalizeTargetRound(row.targetRound),
+      ...(Number.isFinite(row.adp) ? { adp: row.adp } : {}),
+      drafted: false,
+      rank: index,
+    };
+  });
 }
 
 export function playersByRank(players) {
@@ -103,6 +111,19 @@ export function setPlayerTargetRound(players, id, targetRound) {
   return players.map((player) => (
     player.id === id ? { ...player, targetRound: normalizeTargetRound(targetRound) } : player
   ));
+}
+
+export function setPlayerTier(players, id, tier) {
+  const normalizedTier = normalizeTier(tier);
+  return players.map((player) => {
+    if (player.id !== id) return player;
+    if (!normalizedTier) {
+      const withoutTier = { ...player };
+      delete withoutTier.tier;
+      return withoutTier;
+    }
+    return { ...player, tier: normalizedTier };
+  });
 }
 
 export function mergeStatsData(current, imported) {

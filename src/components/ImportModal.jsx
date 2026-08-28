@@ -32,7 +32,7 @@ export function ImportModal({
           <div className="font-semibold text-sm mb-1">Players (replace list)</div>
           <p className="text-xs opacity-70 mb-2">
             Paste free text (<code>Tier, POS, Team, Name[, Target]</code>) or upload CSV with headers in any order:
-            <code> tier</code> (ignored in UI), <code> pos/position</code>, <code> team</code>, <code> name</code>, <code> target</code>.
+            <code> tier</code>, <code> pos/position</code>, <code> team</code>, <code> name</code>, <code> target</code>.
           </p>
           <textarea
             rows={8}

@@ -1,4 +1,4 @@
-import { availablePlayers, playersByRank } from "./players.js";
+import { availablePlayers, normalizeTier, playersByRank } from "./players.js";
 
 const STARTER_REQUIREMENTS = { QB: 1, RB: 2, WR: 2, TE: 1 };
 const FLEX_POSITIONS = new Set(["RB", "WR", "TE"]);
@@ -87,10 +87,44 @@ export function interveningTeamDemand(players, history, settings) {
 
 export function comparableDepth(player, available, rankWindow = RECOMMENDATION_CONFIG.comparableRankWindow) {
   const position = normalizedPosition(player);
+  const tier = normalizeTier(player.tier);
+  const rankedAvailable = playersByRank(available).filter((candidate) => !candidate.drafted);
+
+  if (tier) {
+    return rankedAvailable.filter((candidate) => (
+      candidate.id !== player.id
+      && normalizedPosition(candidate) === position
+      && normalizeTier(candidate.tier) === tier
+    ));
+  }
+
   const cutoff = (player.rank ?? 0) + rankWindow;
-  return playersByRank(available).filter((candidate) => (
+  return rankedAvailable.filter((candidate) => (
     normalizedPosition(candidate) === position && (candidate.rank ?? Infinity) <= cutoff
   ));
+}
+
+function tierDepth(player, available) {
+  const tier = normalizeTier(player.tier);
+  if (!tier) return { hasTier: false, tier: null, sameTierCount: null, nextTier: null, tierCliff: false };
+
+  const position = normalizedPosition(player);
+  const atPosition = available.filter((candidate) => (
+    !candidate.drafted && candidate.id !== player.id && normalizedPosition(candidate) === position
+  ));
+  const sameTierCount = atPosition.filter((candidate) => normalizeTier(candidate.tier) === tier).length;
+  const nextTier = atPosition
+    .map((candidate) => normalizeTier(candidate.tier))
+    .filter((candidateTier) => candidateTier && candidateTier > tier)
+    .sort((a, b) => a - b)[0] ?? null;
+
+  return {
+    hasTier: true,
+    tier,
+    sameTierCount,
+    nextTier,
+    tierCliff: nextTier !== null && sameTierCount <= 1,
+  };
 }
 
 export function detectPositionRuns(history, players, window = RECOMMENDATION_CONFIG.recentPickWindow) {
@@ -113,6 +147,7 @@ export function estimateSurvivalRisk(player, available, lookAhead, runs = {}, ra
   const position = normalizedPosition(player);
   const comparable = comparableDepth(player, available, rankWindow);
   const comparableCount = comparable.length;
+  const tier = tierDepth(player, available);
   const teamDemand = lookAhead.totalDemand[position] || 0;
   const needyTeams = lookAhead.teamDemands.filter(({ demand }) => demand[position] >= 2).length;
   const picksAhead = lookAhead.interveningPicks.length;
@@ -123,17 +158,30 @@ export function estimateSurvivalRisk(player, available, lookAhead, runs = {}, ra
     ? Math.min(2, Math.max(0, lookAhead.nextPick - player.adp) * 0.1)
     : 0;
   const runPressure = runs[position]?.underway && comparableCount <= 3 ? 1.5 : 0;
+  const tierPressure = tier.tierCliff ? 1.75 : 0;
+  const depthRelief = tier.hasTier
+    ? Math.min(3, comparableCount * 0.75)
+    : Math.min(5, Math.max(0, comparableCount - 1));
   const riskScore = Math.max(0,
     Math.min(8, teamDemand * 0.75)
     + Math.min(2, picksAhead * 0.25)
     + rankPressure
     + adpPressure
     + runPressure
-    - Math.min(5, Math.max(0, comparableCount - 1))
+    + tierPressure
+    - depthRelief
   );
   const level = riskScore >= 6 ? "high" : riskScore >= 3 ? "moderate" : "low";
 
-  return { level, riskScore, comparableCount, needyTeams, picksAhead, runUnderway: Boolean(runs[position]?.underway) };
+  return {
+    level,
+    riskScore,
+    comparableCount,
+    needyTeams,
+    picksAhead,
+    runUnderway: Boolean(runs[position]?.underway),
+    ...tier,
+  };
 }
 
 function myRosterNeed(position, counts) {
@@ -152,20 +200,35 @@ function myRosterNeed(position, counts) {
   return { score: 0, reason: null };
 }
 
+function depthDescription(position, survival) {
+  return survival.hasTier
+    ? `${survival.comparableCount} same-tier ${position}s remain`
+    : `${survival.comparableCount} comparable ${position}s remain`;
+}
+
 function recommendationReason(player, position, need, fallAdjustment, survival) {
+  if (survival.hasTier && survival.tierCliff && survival.comparableCount === 0) {
+    return { reason: `Last ${position} in Tier ${survival.tier}`, detail: "Tier cliff ahead" };
+  }
+  if (survival.hasTier && survival.tierCliff) {
+    return { reason: "Tier cliff ahead", detail: depthDescription(position, survival) };
+  }
   if (survival.level === "high" && survival.needyTeams >= 2) {
     return { reason: `${position} may not make it back`, detail: `${survival.needyTeams} ${position}-needy teams pick before you` };
   }
   if (survival.level === "high" && survival.comparableCount <= 2) {
-    return { reason: "Thin tier", detail: `${survival.comparableCount} comparable ${position}s remain` };
+    return { reason: "Thin tier", detail: depthDescription(position, survival) };
   }
   if (fallAdjustment >= 10) return { reason: "Falling value", detail: `Ranked #${(player.rank ?? 0) + 1}` };
-  if (need.reason) return { reason: need.reason, detail: survival.comparableCount > 1 ? `${survival.comparableCount} comparable ${position}s remain` : "Thin tier" };
+  if (need.reason) return { reason: need.reason, detail: survival.comparableCount > 1 ? depthDescription(position, survival) : "Thin tier" };
   if (survival.level === "low" && survival.comparableCount >= 4) {
-    return { reason: `Safe to wait at ${position}`, detail: `${survival.comparableCount} comparable ${position}s remain` };
+    return {
+      reason: survival.hasTier ? "Safe to wait" : `Safe to wait at ${position}`,
+      detail: depthDescription(position, survival),
+    };
   }
   if (survival.runUnderway && survival.comparableCount >= 4) {
-    return { reason: `${position} run underway`, detail: `${survival.comparableCount} comparable ${position}s remain` };
+    return { reason: `${position} run underway`, detail: depthDescription(position, survival) };
   }
   return { reason: "Best available", detail: survival.level === "moderate" ? "Could go before your next pick" : "Strongest ranking value" };
 }
@@ -189,7 +252,8 @@ export function recommendAvailablePlayers(players, history, settings, limit = 3)
       const fallAdjustment = Math.min(24, fall * 1.2);
       const survival = estimateSurvivalRisk(player, available, lookAhead, runs);
       const survivalAdjustment = survival.level === "high" ? 8 : survival.level === "moderate" ? 3 : -1;
-      const score = rankingValue + need.score + fallAdjustment + survivalAdjustment;
+      const tierAdjustment = survival.tierCliff ? 4 : survival.hasTier && survival.comparableCount >= 4 ? -1 : 0;
+      const score = rankingValue + need.score + fallAdjustment + survivalAdjustment + tierAdjustment;
       const explanation = recommendationReason(player, position, need, fallAdjustment, survival);
 
       return { player, score, survival, ...explanation };
