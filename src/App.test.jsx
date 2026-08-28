@@ -20,10 +20,12 @@ describe("Fantasy Draft Board", () => {
   it("moves a drafted player from the rankings to the draft board", () => {
     render(<App />);
 
+    expect(screen.getByText("Round 1 · Pick 1")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Draft" })[0]);
 
     expect(screen.getAllByRole("button", { name: "Draft" })).toHaveLength(9);
     expect(screen.getByText("Ja'Marr Chase")).toBeInTheDocument();
+    expect(screen.getByText("Round 1 · Pick 2")).toBeInTheDocument();
   });
 
   it("keeps pick numbers right-aligned in empty and occupied slots", () => {
@@ -136,5 +138,18 @@ describe("Fantasy Draft Board", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Draft" })[0]);
     expect(within(targets).queryByText("Ja'Marr Chase")).not.toBeInTheDocument();
+  });
+
+  it("shows each target's favorite and target-round states in Targets", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Ja'Marr Chase to watchlist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase Ja'Marr Chase target round" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    const targets = screen.getByRole("heading", { name: "Targets" }).closest("section");
+    expect(within(targets).getByLabelText("Favorite target")).toBeInTheDocument();
+    expect(within(targets).getByTitle("Target round 1")).toBeInTheDocument();
   });
 });

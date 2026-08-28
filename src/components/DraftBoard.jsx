@@ -1,4 +1,5 @@
 import { positionClass } from "../data/draftDefaults.js";
+import { nextDraftStatus } from "../lib/draft.js";
 import { positionRankMap, playersByRank } from "../lib/players.js";
 import { DraftAssistance } from "./DraftAssistance.jsx";
 import { Button } from "./ui.jsx";
@@ -17,17 +18,24 @@ export function DraftBoard({
 }) {
   const columns = `repeat(${settings.numTeams}, minmax(0, 1fr))`;
   const positionRanks = positionRankMap(playersByRank(players));
+  const draftStatus = nextDraftStatus(history.length, settings);
 
   return (
-    <section className={`${dark ? "bg-zinc-700" : "bg-white"} min-w-0 rounded-2xl shadow p-1.5`}>
-      <div className="flex items-center justify-between gap-1.5 mb-1.5">
+    <section className={`${dark ? "bg-zinc-700" : "bg-white"} min-w-0 rounded-2xl shadow p-1.5 md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden`}>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 mb-1.5 shrink-0">
         <div className="flex items-center gap-1.5">
           <h2 className="font-bold text-sm">Draft Board</h2>
           <Button className="bg-orange-300 text-black px-2 py-1 text-[11px]" onClick={onReset}>
             Reset
           </Button>
         </div>
-        <div className="flex items-center gap-1">
+        <span
+          className="justify-self-center rounded-full bg-teal-400 px-2 py-1 text-[10px] font-semibold tabular-nums text-slate-950"
+          aria-label={draftStatus.complete ? "Draft complete" : `Round ${draftStatus.round}, Pick ${draftStatus.pick}`}
+        >
+          {draftStatus.complete ? "Draft complete" : `Round ${draftStatus.round} · Pick ${draftStatus.pick}`}
+        </span>
+        <div className="flex items-center justify-self-end gap-1">
           <Button
             className={`${editNames ? "bg-blue-500 text-white" : "bg-orange-300 text-black"} px-2 py-1 text-[11px]`}
             onClick={() => onEditNamesChange(!editNames)}
@@ -40,8 +48,8 @@ export function DraftBoard({
         </div>
       </div>
 
-      <div className="overflow-x-auto overflow-y-visible">
-        <div className="relative min-w-[960px] xl:min-w-0">
+      <div className="shrink-0 min-w-0 overflow-hidden">
+        <div className="relative min-w-0">
           <div className="grid gap-0.5 mb-0.5" style={{ gridTemplateColumns: columns }}>
             {Array.from({ length: settings.numTeams }, (_, column) => {
               const isMyTeam = settings.myTeam === column;

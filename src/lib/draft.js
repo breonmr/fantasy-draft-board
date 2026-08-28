@@ -17,6 +17,17 @@ export function resetPlayers(players) {
   return players.map((player) => ({ ...player, drafted: false }));
 }
 
+export function nextDraftStatus(historyLength, settings) {
+  const totalPicks = settings.numTeams * settings.numRounds;
+  if (historyLength >= totalPicks) return { complete: true };
+
+  return {
+    complete: false,
+    round: Math.floor(historyLength / settings.numTeams) + 1,
+    pick: historyLength + 1,
+  };
+}
+
 export function reorderAvailablePlayers(players, fromIndex, toIndex) {
   const ranked = playersByRank(players);
   const available = availablePlayers(players);

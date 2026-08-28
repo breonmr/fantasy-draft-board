@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDraft, reorderAvailablePlayers, setPlayerDrafted, undoLastDraft } from "./draft.js";
+import { addDraft, nextDraftStatus, reorderAvailablePlayers, setPlayerDrafted, undoLastDraft } from "./draft.js";
 
 const players = [
   { id: "a", name: "A", rank: 0, drafted: false, starred: true },
@@ -41,5 +41,19 @@ describe("draft state transitions", () => {
     const reordered = reorderAvailablePlayers(players, 0, 2);
 
     expect(reordered.map((player) => player.id)).toEqual(["c", "b", "d", "a"]);
+  });
+});
+
+describe("nextDraftStatus", () => {
+  const settings = { numTeams: 12, numRounds: 14 };
+
+  it("reports the next overall pick and round", () => {
+    expect(nextDraftStatus(0, settings)).toEqual({ complete: false, round: 1, pick: 1 });
+    expect(nextDraftStatus(12, settings)).toEqual({ complete: false, round: 2, pick: 13 });
+    expect(nextDraftStatus(24, settings)).toEqual({ complete: false, round: 3, pick: 25 });
+  });
+
+  it("reports completion after the final draft slot", () => {
+    expect(nextDraftStatus(168, settings)).toEqual({ complete: true });
   });
 });

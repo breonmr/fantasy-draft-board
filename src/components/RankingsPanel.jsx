@@ -167,7 +167,7 @@ export function RankingsPanel({
 }) {
   return (
     <section
-      className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-2xl shadow p-2 flex flex-col min-h-0 md:sticky md:top-2 md:h-[calc(100vh-1rem)]`}
+      className={`${dark ? "bg-zinc-700" : "bg-white"} rounded-2xl shadow p-2 flex flex-col min-h-0 md:h-full md:overflow-hidden`}
     >
       <div className="flex items-center justify-between mb-1.5">
         <h2 className="font-bold text-sm">Overall Rankings</h2>
