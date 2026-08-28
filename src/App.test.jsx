@@ -152,4 +152,27 @@ describe("Fantasy Draft Board", () => {
     expect(within(targets).getByLabelText("Favorite target")).toBeInTheDocument();
     expect(within(targets).getByTitle("Target round 1")).toBeInTheDocument();
   });
+
+  it("keeps a long Targets list inside the desktop scrollable workspace", () => {
+    const { container } = render(<App />);
+
+    screen.getAllByRole("button", { name: /Add .* to watchlist/ }).forEach((button) => {
+      fireEvent.click(button);
+    });
+
+    const app = container.firstElementChild;
+    const rankings = screen.getByRole("heading", { name: "Overall Rankings" }).closest("section");
+    const rankingsList = rankings.querySelector("ul");
+    const assistance = screen.getByLabelText("Draft assistance");
+    const targets = screen.getByRole("heading", { name: "Targets" }).closest("section");
+    const targetList = within(targets).getByRole("list", { name: "Actionable targets" });
+
+    expect(within(targets).getAllByRole("listitem")).toHaveLength(10);
+    expect(app).toHaveClass("md:h-screen", "md:min-h-0", "md:overflow-hidden");
+    expect(rankings).toHaveClass("md:h-full", "md:overflow-hidden");
+    expect(rankingsList).toHaveClass("flex-1", "min-h-0", "overflow-y-auto");
+    expect(assistance).toHaveClass("md:flex-1", "md:min-h-0", "md:grid-rows-[minmax(0,1fr)]", "md:overflow-hidden");
+    expect(targets).toHaveClass("md:min-h-0", "md:overflow-hidden");
+    expect(targetList).toHaveClass("md:flex-1", "md:min-h-0", "md:overflow-y-auto");
+  });
 });

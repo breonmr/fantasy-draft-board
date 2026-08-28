@@ -29,7 +29,7 @@ export function DraftAssistance({ dark, players, history, settings, positionRank
   const pickContext = nextPickContext(history.length, settings);
 
   return (
-    <section className={`mt-1.5 grid gap-1.5 md:min-h-0 md:flex-1 md:grid-cols-2 ${dark ? "text-zinc-100" : "text-gray-900"}`} aria-label="Draft assistance">
+    <section className={`mt-1.5 grid gap-1.5 md:min-h-0 md:flex-1 md:grid-cols-2 md:grid-rows-[minmax(0,1fr)] md:overflow-hidden ${dark ? "text-zinc-100" : "text-gray-900"}`} aria-label="Draft assistance">
       <section className={`${dark ? "bg-zinc-800" : "bg-gray-50"} min-w-0 rounded-lg p-1.5 md:flex md:min-h-0 md:flex-col md:overflow-hidden`} aria-labelledby="targets-heading">
         <div className="mb-1 flex shrink-0 items-baseline justify-between gap-2">
           <h3 id="targets-heading" className="text-sm font-semibold">Targets</h3>
