@@ -77,6 +77,24 @@ function PlayerRow({
 
       {!editMode && (
         <div className="shrink-0 flex items-center gap-1">
+          {player.targetRound ? (
+            <TargetRoundBadge round={player.targetRound} />
+          ) : (
+            <button
+              type="button"
+              className={`w-6 h-6 rounded-md text-base leading-none hover:bg-amber-100 ${
+                player.starred ? "text-amber-500" : "text-gray-400 hover:text-amber-500"
+              }`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleStar(player.id);
+              }}
+              aria-label={`${player.starred ? "Remove" : "Add"} ${player.name} ${player.starred ? "from" : "to"} watchlist`}
+              title={player.starred ? "Remove from watchlist" : "Add to watchlist"}
+            >
+              {player.starred ? "★" : "☆"}
+            </button>
+          )}
           <Button
             className="bg-blue-900 text-white px-2 py-1 text-[11px]"
             onClick={(event) => {
@@ -86,21 +104,6 @@ function PlayerRow({
           >
             Draft
           </Button>
-          <TargetRoundBadge round={player.targetRound} />
-          <button
-            type="button"
-            className={`w-6 h-6 rounded-md text-base leading-none hover:bg-amber-100 ${
-              player.starred ? "text-amber-500" : "text-gray-400 hover:text-amber-500"
-            }`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleStar(player.id);
-            }}
-            aria-label={`${player.starred ? "Remove" : "Add"} ${player.name} ${player.starred ? "from" : "to"} watchlist`}
-            title={player.starred ? "Remove from watchlist" : "Add to watchlist"}
-          >
-            {player.starred ? "★" : "☆"}
-          </button>
         </div>
       )}
       {editMode && (

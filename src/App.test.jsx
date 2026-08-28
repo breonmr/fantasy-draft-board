@@ -105,6 +105,28 @@ describe("Fantasy Draft Board", () => {
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0].targetRound).toBeNull();
   });
 
+  it("uses one target-or-favorite control immediately before Draft", () => {
+    const { container } = render(<App />);
+    const firstRow = container.querySelector("li[data-id]");
+    const starButton = within(firstRow).getByRole("button", { name: "Add Ja'Marr Chase to watchlist" });
+
+    fireEvent.click(starButton);
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase Ja'Marr Chase target round" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(within(firstRow).getByTitle("Target round 1")).toBeInTheDocument();
+    expect(within(firstRow).queryByRole("button", { name: /Ja'Marr Chase.*watchlist/ })).not.toBeInTheDocument();
+    expect(firstRow.lastElementChild.lastElementChild).toHaveTextContent("Draft");
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0].starred).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear Ja'Marr Chase target round" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(within(firstRow).getByRole("button", { name: "Remove Ja'Marr Chase from watchlist" })).toBeInTheDocument();
+  });
+
   it("removes drafted favorites from Targets", () => {
     render(<App />);
 
