@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY } from "./data/draftDefaults.js";
 import App from "./App.jsx";
 import { reorderAvailablePlayers } from "./lib/draft.js";
@@ -182,6 +182,47 @@ describe("Fantasy Draft Board", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Draft" })[0]);
     expect(within(targets).queryByText("Ja'Marr Chase")).not.toBeInTheDocument();
+  });
+
+  it("restores drafted targets after undo without clearing their metadata", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Ja'Marr Chase to watchlist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase Ja'Marr Chase target round" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done", exact: true }));
+    const targets = screen.getByRole("heading", { name: "Targets" }).closest("section");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Draft" })[0]);
+    expect(within(targets).queryByText("Ja'Marr Chase")).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0]).toMatchObject({ starred: true, targetRound: 1, drafted: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(within(targets).getByText("Ja'Marr Chase")).toBeInTheDocument();
+    expect(within(targets).getByLabelText("Favorite target")).toBeInTheDocument();
+    expect(within(targets).getByTitle("Target round 1")).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0]).toMatchObject({ starred: true, targetRound: 1, drafted: false });
+  });
+
+  it("restores drafted targets after reset without changing their ranking metadata", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Ja'Marr Chase to watchlist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase Ja'Marr Chase target round" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done", exact: true }));
+    const targets = screen.getByRole("heading", { name: "Targets" }).closest("section");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Draft" })[0]);
+    expect(within(targets).queryByText("Ja'Marr Chase")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(within(targets).getByText("Ja'Marr Chase")).toBeInTheDocument();
+    expect(within(targets).getByLabelText("Favorite target")).toBeInTheDocument();
+    expect(within(targets).getByTitle("Target round 1")).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players[0]).toMatchObject({ rank: 0, starred: true, targetRound: 1, drafted: false });
+    confirmSpy.mockRestore();
   });
 
   it("shows each target's favorite and target-round states in Targets", () => {
