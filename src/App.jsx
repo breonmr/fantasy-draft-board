@@ -6,12 +6,12 @@ import { RankingsPanel } from "./components/RankingsPanel.jsx";
 import { IconToggle } from "./components/ui.jsx";
 import { addDraft, reorderAvailablePlayers, resetPlayers, setPlayerDrafted, undoLastDraft } from "./lib/draft.js";
 import { parseImportLine, parsePlayersCSV } from "./lib/parsers.js";
+import { destinationTierAtPointer } from "./lib/tierDrop.js";
 import {
   availablePlayers,
   createPlayers,
   filterAvailablePlayers,
   positionRankMap,
-  setPlayerTier,
   setPlayerTargetRound,
   togglePlayerStar,
 } from "./lib/players.js";
@@ -37,6 +37,7 @@ export default function App() {
 
   const fileInputRef = useRef(null);
   const itemRefs = useRef(new Map());
+  const tierDividerRefs = useRef(new Map());
   const rectsRef = useRef([]);
   const availableRef = useRef([]);
   const filteredAvailableRef = useRef([]);
@@ -77,10 +78,6 @@ export default function App() {
     setPlayers((current) => setPlayerTargetRound(current, id, targetRound));
   }
 
-  function updateTier(id, tier) {
-    setPlayers((current) => setPlayerTier(current, id, tier));
-  }
-
   function undoLast() {
     setHistory((current) => {
       const { history: nextHistory, lastId } = undoLastDraft(current);
@@ -112,8 +109,24 @@ export default function App() {
       const element = itemRefs.current.get(player.id);
       if (!element) return [];
       const rect = element.getBoundingClientRect();
-      return [{ id: player.id, index, mid: (rect.top + rect.bottom) / 2 }];
+      return [{
+        id: player.id,
+        index,
+        tier: player.tier,
+        top: rect.top,
+        bottom: rect.bottom,
+        mid: (rect.top + rect.bottom) / 2,
+      }];
     });
+  }
+
+  function currentTierDividers() {
+    return [...tierDividerRefs.current.entries()]
+      .flatMap(([index, element]) => {
+        if (!element) return [];
+        const rect = element.getBoundingClientRect();
+        return [{ index: Number(index), tier: Number(element.dataset.tierDivider), top: rect.top, bottom: rect.bottom }];
+      });
   }
 
   function startDrag(event, id, fromFiltered) {
@@ -131,6 +144,7 @@ export default function App() {
       offX: event.clientX - rect.left,
       offY: event.clientY - rect.top,
       w: rect.width,
+      destinationTier: null,
     };
     setDragState(nextDrag);
     setInsertionIndex(fromFiltered);
@@ -146,7 +160,17 @@ export default function App() {
     let nextIndex = rectsRef.current.findIndex((item) => event.clientY < item.mid);
     if (nextIndex === -1) nextIndex = rectsRef.current.length;
     setInsertionIndex(nextIndex);
-    setDragState({ ...currentDrag, x: event.clientX, y: event.clientY });
+    setDragState({
+      ...currentDrag,
+      x: event.clientX,
+      y: event.clientY,
+      destinationTier: destinationTierAtPointer(
+        event.clientY,
+        rectsRef.current,
+        currentTierDividers(),
+        currentDrag.id
+      ),
+    });
   }
 
   function onPointerUp() {
@@ -169,7 +193,12 @@ export default function App() {
 
     if (fromAvailableIndex < toAvailableIndex) toAvailableIndex -= 1;
     if (fromAvailableIndex >= 0 && toAvailableIndex >= 0) {
-      setPlayers((current) => reorderAvailablePlayers(current, fromAvailableIndex, toAvailableIndex));
+      setPlayers((current) => reorderAvailablePlayers(
+        current,
+        fromAvailableIndex,
+        toAvailableIndex,
+        currentDrag.destinationTier
+      ));
     }
   }
 
@@ -254,7 +283,7 @@ export default function App() {
             onDraft={draftPlayer}
             onToggleStar={toggleStar}
             onTargetRoundChange={updateTargetRound}
-            onTierChange={updateTier}
+            tierDividerRefs={tierDividerRefs}
           />
           <DraftBoard
             dark={dark}

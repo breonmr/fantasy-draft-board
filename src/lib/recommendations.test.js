@@ -7,6 +7,7 @@ import {
   comparableDepth,
   recommendAvailablePlayers,
 } from "./recommendations.js";
+import { reorderAvailablePlayers } from "./draft.js";
 
 const twoTeamSettings = { numTeams: 2, myTeam: 0 };
 
@@ -84,6 +85,18 @@ describe("survival risk and recommendation scoring", () => {
       totalDemand: { QB: 0, RB: 0, WR: 0, TE: 0 },
       teamDemands: [],
     }).comparableCount).toBe(1);
+  });
+
+  it("uses a tier assigned during reordering for later comparable-player counts", () => {
+    const reordered = reorderAvailablePlayers([
+      { id: "rb-one", pos: "RB", rank: 0, drafted: false, tier: 2 },
+      { id: "untiered", pos: "RB", rank: 1, drafted: false },
+      { id: "rb-three", pos: "RB", rank: 2, drafted: false, tier: 3 },
+    ], 1, 1, 2);
+    const assigned = reordered.find((player) => player.id === "untiered");
+
+    expect(assigned.tier).toBe(2);
+    expect(comparableDepth(assigned, reordered).map((player) => player.id)).toEqual(["rb-one"]);
   });
 
   it("uses the rank-window comparable fallback when a player has no tier", () => {

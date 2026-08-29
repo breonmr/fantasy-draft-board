@@ -1,4 +1,4 @@
-import { availablePlayers, playersByRank } from "./players.js";
+import { availablePlayers, normalizeTier, playersByRank } from "./players.js";
 
 export function setPlayerDrafted(players, id, drafted) {
   return players.map((player) => (player.id === id ? { ...player, drafted } : player));
@@ -28,7 +28,7 @@ export function nextDraftStatus(historyLength, settings) {
   };
 }
 
-export function reorderAvailablePlayers(players, fromIndex, toIndex) {
+export function reorderAvailablePlayers(players, fromIndex, toIndex, destinationTier = null) {
   const ranked = playersByRank(players);
   const available = availablePlayers(players);
   const reordered = [...available];
@@ -43,5 +43,10 @@ export function reorderAvailablePlayers(players, fromIndex, toIndex) {
     player.drafted ? player : reordered[availableIndex++]
   );
 
-  return merged.map((player, index) => ({ ...byId[player.id], rank: index }));
+  const nextTier = normalizeTier(destinationTier);
+  return merged.map((player, index) => ({
+    ...byId[player.id],
+    ...(player.id === moved.id && nextTier ? { tier: nextTier } : {}),
+    rank: index,
+  }));
 }

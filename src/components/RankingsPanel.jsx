@@ -25,18 +25,11 @@ function PlayerRow({
   onDraft,
   onToggleStar,
   onTargetRoundChange,
-  onTierChange,
 }) {
   const changeTargetRound = (event, nextRound) => {
     event.preventDefault();
     event.stopPropagation();
     onTargetRoundChange(player.id, nextRound);
-  };
-
-  const changeTier = (event, nextTier) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onTierChange(player.id, nextTier);
   };
 
   return (
@@ -114,37 +107,7 @@ function PlayerRow({
         </div>
       )}
       {editMode && (
-        <div className="flex shrink-0 items-center gap-1" onPointerDown={(event) => event.stopPropagation()}>
-          <div className="grid w-[66px] grid-cols-[20px_22px_20px] items-center gap-0.5" aria-label={`${player.name} tier controls`}>
-            <button
-              type="button"
-              className="h-5 w-5 rounded bg-slate-500 text-xs leading-none hover:bg-slate-400 disabled:opacity-35"
-              onClick={(event) => changeTier(event, player.tier ? player.tier - 1 : null)}
-              disabled={!player.tier || player.tier <= 1}
-              aria-label={`Decrease ${player.name} tier`}
-              title="Decrease tier"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              className="h-5 min-w-0 rounded bg-slate-600 px-0.5 text-[9px] font-semibold tabular-nums text-white hover:bg-slate-500 disabled:opacity-55"
-              onClick={(event) => changeTier(event, player.tier ? null : 1)}
-              aria-label={player.tier ? `Clear ${player.name} tier` : `Set ${player.name} tier 1`}
-              title={player.tier ? "Clear tier" : "Set tier 1"}
-            >
-              {player.tier ? `T${player.tier}` : "T—"}
-            </button>
-            <button
-              type="button"
-              className="h-5 w-5 rounded bg-slate-500 text-xs leading-none hover:bg-slate-400"
-              onClick={(event) => changeTier(event, (player.tier || 0) + 1)}
-              aria-label={`Increase ${player.name} tier`}
-              title="Increase tier"
-            >
-              +
-            </button>
-          </div>
+        <div className="flex shrink-0 items-center" onPointerDown={(event) => event.stopPropagation()}>
           <div className="grid w-[86px] grid-cols-4 items-center gap-0.5" aria-label={`${player.name} target round controls`}>
             <button
               type="button"
@@ -206,7 +169,7 @@ export function RankingsPanel({
   onDraft,
   onToggleStar,
   onTargetRoundChange,
-  onTierChange,
+  tierDividerRefs,
 }) {
   return (
     <section
@@ -280,6 +243,10 @@ export function RankingsPanel({
             {player.tier && player.tier !== players[index - 1]?.tier && (
               <li
                 data-tier-divider={player.tier}
+                ref={(element) => {
+                  if (element) tierDividerRefs.current.set(index, element);
+                  else tierDividerRefs.current.delete(index);
+                }}
                 className={`rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-600 ${dark ? "bg-slate-800 text-slate-300" : ""}`}
               >
                 Tier {player.tier}
@@ -299,7 +266,6 @@ export function RankingsPanel({
               onDraft={onDraft}
               onToggleStar={onToggleStar}
               onTargetRoundChange={onTargetRoundChange}
-              onTierChange={onTierChange}
             />
           </Fragment>
         ))}

@@ -43,6 +43,54 @@ describe("draft state transitions", () => {
 
     expect(reordered.map((player) => player.id)).toEqual(["c", "b", "d", "a"]);
   });
+
+  it("preserves a tier when a player is dropped within its current tier section", () => {
+    const tieredPlayers = [
+      { id: "a", rank: 0, drafted: false, tier: 2 },
+      { id: "b", rank: 1, drafted: false, tier: 2 },
+      { id: "c", rank: 2, drafted: false, tier: 3 },
+    ];
+
+    const reordered = reorderAvailablePlayers(tieredPlayers, 1, 0, 2);
+    expect(reordered.map((player) => player.id)).toEqual(["b", "a", "c"]);
+    expect(reordered.find((player) => player.id === "b").tier).toBe(2);
+  });
+
+  it("assigns the destination tier when a player crosses a tier divider", () => {
+    const tieredPlayers = [
+      { id: "a", rank: 0, drafted: false, tier: 2 },
+      { id: "b", rank: 1, drafted: false, tier: 2 },
+      { id: "c", rank: 2, drafted: false, tier: 3 },
+      { id: "d", rank: 3, drafted: false, tier: 3 },
+    ];
+
+    const reordered = reorderAvailablePlayers(tieredPlayers, 3, 2, 2);
+    expect(reordered.map((player) => player.id)).toEqual(["a", "b", "d", "c"]);
+    expect(reordered.find((player) => player.id === "d").tier).toBe(2);
+  });
+
+  it("assigns an untiered player to the explicit tier it is dropped into", () => {
+    const tieredPlayers = [
+      { id: "a", rank: 0, drafted: false, tier: 2 },
+      { id: "b", rank: 1, drafted: false, tier: 2 },
+      { id: "untiered", rank: 2, drafted: false },
+      { id: "c", rank: 3, drafted: false, tier: 3 },
+    ];
+
+    const reordered = reorderAvailablePlayers(tieredPlayers, 2, 1, 2);
+    expect(reordered.map((player) => player.id)).toEqual(["a", "untiered", "b", "c"]);
+    expect(reordered.find((player) => player.id === "untiered").tier).toBe(2);
+  });
+
+  it("does not assign a tier when an untiered destination has no explicit tier section", () => {
+    const reordered = reorderAvailablePlayers([
+      { id: "a", rank: 0, drafted: false, tier: 2 },
+      { id: "untiered", rank: 1, drafted: false },
+      { id: "b", rank: 2, drafted: false },
+    ], 2, 1);
+
+    expect(reordered.find((player) => player.id === "b").tier).toBeUndefined();
+  });
 });
 
 describe("nextDraftStatus", () => {

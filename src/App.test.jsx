@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { STORAGE_KEY } from "./data/draftDefaults.js";
 import App from "./App.jsx";
+import { reorderAvailablePlayers } from "./lib/draft.js";
 
 describe("Fantasy Draft Board", () => {
   beforeEach(() => {
@@ -73,7 +74,7 @@ describe("Fantasy Draft Board", () => {
     expect(runningBackFilter).toHaveClass("bg-teal-400");
   });
 
-  it("renders explicit tier dividers in normal and edit modes", () => {
+  it("renders explicit tier dividers in normal and edit modes without tier row controls", () => {
     render(<App />);
 
     expect(screen.getByText("Tier 1")).toBeInTheDocument();
@@ -81,11 +82,20 @@ describe("Fantasy Draft Board", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit", exact: true }));
     expect(screen.getByText("Tier 1")).toBeInTheDocument();
     expect(screen.getByText("Tier 2")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /tier$/i })).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Increase Jonathan Taylor tier" }));
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players.find((player) => player.name === "Jonathan Taylor").tier).toBe(3);
-    fireEvent.click(screen.getByRole("button", { name: "Clear Jonathan Taylor tier" }));
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).players.find((player) => player.name === "Jonathan Taylor").tier).toBeUndefined();
+  it("renders dividers from the tier values assigned by a drag reorder", () => {
+    const players = reorderAvailablePlayers([
+      { id: "a", name: "A", pos: "RB", team: "DET", rank: 0, drafted: false, tier: 2 },
+      { id: "b", name: "B", pos: "RB", team: "DET", rank: 1, drafted: false, tier: 2 },
+      { id: "c", name: "C", pos: "RB", team: "DET", rank: 2, drafted: false, tier: 3 },
+      { id: "d", name: "D", pos: "RB", team: "DET", rank: 3, drafted: false, tier: 3 },
+    ], 3, 2, 2);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ players }));
+
+    const { container } = render(<App />);
+    expect([...container.querySelectorAll("[data-tier-divider]")].map((divider) => divider.dataset.tierDivider)).toEqual(["2", "3"]);
   });
 
   it("clears a player search with the clear control", () => {
